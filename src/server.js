@@ -2,6 +2,7 @@
 // SSE stream that pushes the world to every open page.
 
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -22,6 +23,18 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 
 const PORT = Number(process.env.PORT) || 4173;
 const HOST = process.env.HOST || '0.0.0.0';
+
+// One shared password guards everything except the board. The cookie is a hash
+// of the password, so it needs no session store and survives a restart — the
+// whole scheme is worth exactly as much as the one password it wraps, which is
+// the right size for a game prop on a local network.
+const AUTH_PASSWORD = process.env.AUTH_PASSWORD || 'jenneissexy';
+const AUTH_COOKIE = 'jhm_auth';
+const AUTH_TOKEN = crypto.createHash('sha256').update(`jh-market::${AUTH_PASSWORD}`).digest('hex');
+const AUTH_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+// The board is meant to hang on a wall with nobody logged in.
+const PUBLIC_PAGES = new Set(['/market', '/login']);
 const TICK_MS = 50; // real-time loop resolution
 const BROADCAST_MS = 100; // how often pages are pushed an update
 const MAX_STEPS_PER_LOOP = 400; // guard against runaway catch-up after a stall
@@ -61,11 +74,11 @@ function scheduleSave() {
 
 // --- SSE clients -----------------------------------------------------------
 
-/** @type {Set<{res: http.ServerResponse, rev: number, day: number, len: number}>} */
+/** @type {Set<{res: http.ServerResponse, rev: number, day: number, len: number, authed: boolean}>} */
 const clients = new Set();
 
-function businessMeta(b) {
-  const pos = state.portfolio.positions[b.id];
+function businessMeta(b, authed) {
+  const pos = authed ? state.portfolio.positions[b.id] : null;
   return {
     id: b.id,
     name: b.name,
@@ -136,28 +149,42 @@ function portfolioView() {
   };
 }
 
-function initPayload() {
+/**
+ * Without a session a viewer sees the public board and nothing else: no private
+ * listings, no positions, no book. The board page only ever reads those public
+ * fields, so it renders identically either way.
+ */
+function visibleBusinesses(authed) {
+  return authed ? state.businesses : state.businesses.filter((b) => b.market === 'public');
+}
+
+function initPayload(authed) {
   return {
     type: 'init',
+    authed,
     rev: state.rev,
     clock: clockView(),
     settings: state.settings,
     palette: SERIES_COLORS,
-    businesses: state.businesses.map((b) => ({ ...businessMeta(b), history: b.history })),
-    equityHistory: state.portfolio.equityHistory,
-    portfolio: portfolioView(),
+    businesses: visibleBusinesses(authed).map((b) => ({ ...businessMeta(b, authed), history: b.history })),
+    equityHistory: authed ? state.portfolio.equityHistory : [],
+    portfolio: authed ? portfolioView() : null,
   };
 }
 
-function deltaPayload(from) {
+function deltaPayload(from, authed) {
   return {
     type: 'delta',
+    authed,
     rev: state.rev,
     clock: clockView(),
     from,
-    businesses: state.businesses.map((b) => ({ ...businessMeta(b), points: b.history.slice(from) })),
-    equityPoints: state.portfolio.equityHistory.slice(from),
-    portfolio: portfolioView(),
+    businesses: visibleBusinesses(authed).map((b) => ({
+      ...businessMeta(b, authed),
+      points: b.history.slice(from),
+    })),
+    equityPoints: authed ? state.portfolio.equityHistory.slice(from) : [],
+    portfolio: authed ? portfolioView() : null,
   };
 }
 
@@ -171,9 +198,10 @@ function sendTo(client, payload) {
 }
 
 function pushClient(client) {
+  // Every history is the same length, so one cursor works for any audience.
   const len = state.businesses[0] ? state.businesses[0].history.length : state.clock.minuteOfDay + 1;
   const stale = client.rev !== state.rev || client.day !== state.clock.day || client.len > len;
-  const payload = stale ? initPayload() : deltaPayload(client.len);
+  const payload = stale ? initPayload(client.authed) : deltaPayload(client.len, client.authed);
   if (!sendTo(client, payload)) {
     clients.delete(client);
     return;
@@ -231,12 +259,46 @@ const MIME = {
 
 const PAGES = {
   '/': 'index.html',
+  '/login': 'login.html',
   '/clock': 'clock.html',
   '/market': 'market.html',
   '/desk': 'desk.html',
   '/private': 'private.html',
   '/admin': 'admin.html',
 };
+
+// --- authentication --------------------------------------------------------
+
+function parseCookies(req) {
+  const out = {};
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    out[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return out;
+}
+
+function isAuthed(req) {
+  const token = parseCookies(req)[AUTH_COOKIE];
+  if (typeof token !== 'string' || token.length !== AUTH_TOKEN.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(AUTH_TOKEN));
+}
+
+/** Behind a TLS-terminating proxy the cookie should still be marked Secure. */
+const isHttps = (req) => (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+
+function authCookie(req, token) {
+  const parts = [
+    `${AUTH_COOKIE}=${token}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    token ? `Max-Age=${AUTH_MAX_AGE}` : 'Max-Age=0',
+  ];
+  if (isHttps(req)) parts.push('Secure');
+  return parts.join('; ');
+}
 
 function sendJson(res, code, body) {
   const text = JSON.stringify(body);
@@ -293,7 +355,7 @@ async function handleApi(req, res, urlPath, query) {
       'X-Accel-Buffering': 'no',
     });
     res.write('retry: 1000\n\n');
-    const client = { res, rev: -1, day: -1, len: 0 };
+    const client = { res, rev: -1, day: -1, len: 0, authed: isAuthed(req) };
     clients.add(client);
     pushClient(client);
     const keepAlive = setInterval(() => {
@@ -304,6 +366,29 @@ async function handleApi(req, res, urlPath, query) {
       clients.delete(client);
     });
     return;
+  }
+
+  if (urlPath === '/api/login' && req.method === 'POST') {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: err.message });
+    }
+    const given = String(body.password ?? '');
+    const supplied = crypto.createHash('sha256').update(`jh-market::${given}`).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(AUTH_TOKEN))) {
+      // A small delay takes the sting out of scripted guessing.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return sendJson(res, 401, { ok: false, error: 'Verkeerd wachtwoord' });
+    }
+    res.setHeader('Set-Cookie', authCookie(req, AUTH_TOKEN));
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (urlPath === '/api/logout' && req.method === 'POST') {
+    res.setHeader('Set-Cookie', authCookie(req, ''));
+    return sendJson(res, 200, { ok: true });
   }
 
   if (urlPath === '/api/health' && req.method === 'GET') {
@@ -318,11 +403,16 @@ async function handleApi(req, res, urlPath, query) {
   }
 
   if (urlPath === '/api/state' && req.method === 'GET') {
-    return sendJson(res, 200, initPayload());
+    return sendJson(res, 200, initPayload(isAuthed(req)));
   }
 
   if (req.method !== 'POST') {
     return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
+  }
+
+  // Everything past this point changes the world, so it needs the password.
+  if (!isAuthed(req)) {
+    return sendJson(res, 401, { ok: false, error: 'Log eerst in' });
   }
 
   let body;
@@ -415,9 +505,19 @@ const server = http.createServer(async (req, res) => {
   try {
     if (urlPath.startsWith('/api/')) {
       await handleApi(req, res, urlPath, url.searchParams);
-    } else {
-      await serveStatic(res, urlPath);
+      return;
     }
+    // Static assets stay open — the secrets live in the data, not the markup.
+    // Pages that show more than the board need a session.
+    if (PAGES[urlPath] && !PUBLIC_PAGES.has(urlPath) && !isAuthed(req)) {
+      res.writeHead(302, {
+        Location: `/login?next=${encodeURIComponent(urlPath)}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+    await serveStatic(res, urlPath);
   } catch (err) {
     console.error('[market] request failed:', err);
     if (!res.headersSent) sendJson(res, 500, { ok: false, error: 'Internal error' });

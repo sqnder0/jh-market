@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inloggen · Beurs</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .login-stage {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-card { width: min(380px, 100%); }
+    .login-card .brand { justify-content: center; font-size: 17px; margin-bottom: 18px; }
+    .login-card h1 { font-size: 19px; margin-bottom: 6px; text-align: center; }
+    .login-card .lead { color: var(--text-muted); font-size: 13px; text-align: center; margin: 0 0 20px; }
+    .login-card button { width: 100%; padding: 11px; font-size: 15px; font-weight: 600; }
+
+    .login-error {
+      display: none;
+      margin-top: 12px;
+      font-size: 13px;
+      border: 1px solid rgba(208, 59, 59, 0.4);
+      background: rgba(208, 59, 59, 0.08);
+      color: #f08a8a;
+      border-radius: var(--radius-sm);
+      padding: 8px 11px;
+    }
+    .login-error[data-show='true'] { display: block; }
+
+    .login-foot { margin-top: 18px; text-align: center; font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <main class="login-stage">
+    <div class="login-card card">
+      <div class="brand"><span class="brand-dot"></span> Beurs</div>
+      <h1>Even inloggen</h1>
+      <p class="lead">Het beursbord is vrij toegankelijk. De rest niet.</p>
+
+      <form id="form">
+        <div class="field">
+          <label for="password">Wachtwoord</label>
+          <input type="password" id="password" autocomplete="current-password" autofocus />
+        </div>
+        <button type="submit" class="primary" id="submit">Inloggen</button>
+      </form>
+
+      <div class="login-error" id="error" data-show="false"></div>
+      <p class="login-foot"><a href="/market">Naar het beursbord →</a></p>
+    </div>
+  </main>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+
+    // Only same-origin paths are honoured, so ?next= cannot bounce elsewhere.
+    function nextPath() {
+      const raw = new URLSearchParams(location.search).get('next') || '/';
+      return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+    }
+
+    $('form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      $('submit').disabled = true;
+      $('error').dataset.show = 'false';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: $('password').value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          location.replace(nextPath());
+          return;
+        }
+        $('error').textContent = data.error || 'Inloggen mislukt';
+      } catch {
+        $('error').textContent = 'Kan de server niet bereiken';
+      }
+      $('error').dataset.show = 'true';
+      $('password').select();
+      $('submit').disabled = false;
+    });
+  </script>
+</body>
+</html>

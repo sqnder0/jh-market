@@ -18,14 +18,35 @@ PORT=8080 npm start
 
 ## The pages
 
-| URL | Who looks at it | What it is |
+| URL | Access | What it is |
 |---|---|---|
-| `/` | you | Hub: live status and links to everything |
-| `/clock` | **projector** | The game clock, 09:00 → 19:00, with the beurs and casino windows |
-| `/market` | **projector** | The board: price chart and quotes. Read only — no buttons |
-| `/desk` | dealer only | Trade ticket, positions and the running book |
-| `/private` | businessman only | His private shares, big numbers, deliberately no chart |
-| `/admin` | game leader only | Businesses, day schedule, clock speed, price pushes |
+| `/market` | **open** | The board: price chart and quotes. Read only — no buttons |
+| `/login` | open | Password prompt for everything else |
+| `/` | password | Hub: live status and links to everything |
+| `/clock` | password | The game clock, 09:00 → 19:00, with the beurs and casino windows |
+| `/desk` | password | Trade ticket, positions and the running book |
+| `/private` | password | The businessman's private shares, deliberately no chart |
+| `/admin` | password | Businesses, day schedule, clock speed, price pushes |
+
+## Access
+
+`/market` is deliberately wide open — it is meant to hang full-screen on a wall
+like a Wall Street ticker, with nobody logged in. Logged out, the page drops its
+navigation bar and shows only the brand, the clock and the session pills.
+
+Everything else needs one shared password, set with `AUTH_PASSWORD`
+(default `jenneissexy`). Log in once per device at `/login`; the cookie is
+`HttpOnly`, `SameSite=Lax`, `Secure` behind HTTPS, and lasts 30 days. There is a
+**Uitloggen** link in the nav.
+
+The gate is not only on the pages. An anonymous viewer's live stream carries the
+public listings and nothing else — no private companies, no positions, no dealer
+book — so opening devtools on the wall display gives away nothing. Every
+state-changing endpoint returns `401` without a session.
+
+This is one password shared by the whole crew, which is the right size for a
+game running on one room's network. It is not an account system: anyone who
+learns the password can do anything a game leader can.
 
 ## The clock
 
@@ -102,6 +123,7 @@ docker run -p 4173:4173 jh-market
 | `PORT` | `4173` | Port to listen on. Most platforms set this for you. |
 | `HOST` | `0.0.0.0` | Interface to bind. Leave alone in a container. |
 | `DATA_DIR` | `./data` | Where `state.json` is written. |
+| `AUTH_PASSWORD` | `jenneissexy` | Guards every page except the board. |
 
 `GET /api/health` returns `{ ok, day, time, running, businesses, uptimeSeconds }`
 for platform health checks.
@@ -110,9 +132,9 @@ for platform health checks.
 without one every redeploy resets the game to day 1 — fine while you are still
 building it, bad halfway through a session.
 
-**There is no authentication.** Anyone with the URL can open `/admin` and move
-every price. If it is reachable from the internet, put it behind whatever access
-control your platform offers, or only deploy it on the network the game runs on.
+**Change `AUTH_PASSWORD` if this is reachable from the internet.** The default
+is committed to this repo, so on a public URL it protects nothing. Setting the
+env var is enough — no rebuild, and it invalidates existing cookies.
 
 ## Layout
 
@@ -120,10 +142,11 @@ control your platform offers, or only deploy it on the network the game runs on.
 nixpacks.toml    deployment build/start config
 src/sim.js       the simulation: clock, schedule, prices, portfolio  (all logic)
 src/server.js    static files, JSON command API, SSE broadcast, health check
-public/*.html    one file per page
+public/*.html    one file per page, plus login.html
 public/js/       common.js (SSE + formatting), dom.js (list diffing),
                  chart.js (canvas chart), one script per page
-test/            engine tests — node --test
+test/            sim.test.js (engine) + auth.test.js (the access gate,
+                 which boots a real server) — node --test
 ```
 
 The server is authoritative: pages send commands and render what comes back,

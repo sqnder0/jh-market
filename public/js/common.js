@@ -8,6 +8,7 @@ export const store = {
   equityHistory: [],
   portfolio: null,
   connected: false,
+  authed: false,
 };
 
 const listeners = new Set();
@@ -26,6 +27,7 @@ function emit() {
 }
 
 function applyInit(msg) {
+  store.authed = Boolean(msg.authed);
   store.clock = msg.clock;
   store.settings = msg.settings;
   store.palette = msg.palette;
@@ -35,6 +37,7 @@ function applyInit(msg) {
 }
 
 function applyDelta(msg) {
+  store.authed = Boolean(msg.authed);
   store.clock = msg.clock;
   store.portfolio = msg.portfolio;
   const byId = new Map(store.businesses.map((b) => [b.id, b]));
@@ -100,6 +103,11 @@ export async function api(path, body = {}) {
   });
   let data = {};
   try { data = await res.json(); } catch { /* empty body */ }
+  if (res.status === 401) {
+    // The session went away mid-game; get a fresh one and come back here.
+    location.assign(`/login?next=${encodeURIComponent(location.pathname)}`);
+    throw new Error('Niet ingelogd');
+  }
   if (!res.ok || data.ok === false) {
     const message = data.error || `Request failed (${res.status})`;
     toast(message, 'error');
@@ -186,13 +194,14 @@ export function mountChrome(active) {
 
   bar.innerHTML = `
     <div class="brand"><span class="brand-dot" id="brand-dot"></span> Beurs</div>
-    <nav class="nav">
+    <nav class="nav" id="nav" hidden>
       ${link('/', 'home', 'Hub')}
       ${link('/clock', 'clock', 'Klok')}
       ${link('/market', 'market', 'Beursbord')}
       ${link('/desk', 'desk', 'Dealer')}
       ${link('/private', 'private', 'Privé')}
       ${link('/admin', 'admin', 'Admin')}
+      <a href="#" id="logout">Uitloggen</a>
     </nav>
     <div class="topbar-clock">
       <span class="pill" id="bar-exchange">beurs</span>
@@ -202,7 +211,15 @@ export function mountChrome(active) {
       <span class="pill" id="conn">connecting</span>
     </div>`;
 
+  document.getElementById('logout').addEventListener('click', async (event) => {
+    event.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    location.assign('/login');
+  });
+
   onState((s) => {
+    // Logged out means this is the wall display: brand and clock only.
+    document.getElementById('nav').hidden = !s.authed;
     document.getElementById('bar-day').textContent = `Dag ${s.clock.day}`;
     document.getElementById('bar-time').textContent = s.clock.time;
     document.getElementById('brand-dot').dataset.running = String(s.clock.running);
