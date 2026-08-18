@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Beurssimulatie</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 20px; }
+
+    .hub-card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .hub-card:hover { border-color: var(--border-strong); background: var(--surface-2); }
+    .hub-card h2 { margin-bottom: 6px; font-size: 17px; }
+    .hub-card p { margin: 0; color: var(--text-muted); font-size: 13px; }
+    .hub-card .kicker {
+      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 10px; color: var(--accent);
+    }
+    .hub-card[data-audience='hidden'] .kicker { color: var(--warning); }
+
+    .movers { display: grid; gap: 8px; }
+    .mover { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .mover .m-val { margin-left: auto; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <header class="topbar"></header>
+
+  <main class="page" style="max-width: 1150px;">
+    <div class="page-head">
+      <div>
+        <h1>Beurssimulatie</h1>
+        <p>Eén klok, één beursbord, één dealerbalie. Alles hieronder loopt live mee in elk open venster.</p>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat">
+        <div class="label">Speltijd</div>
+        <div class="value num" id="h-time">--:--</div>
+        <div class="sub" id="h-day">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Beurs</div>
+        <div class="value" id="h-exchange">–</div>
+        <div class="sub" id="h-exchange-sub">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Casino</div>
+        <div class="value" id="h-casino">–</div>
+        <div class="sub" id="h-casino-sub">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Tempo</div>
+        <div class="value num" id="h-speed">–</div>
+        <div class="sub" id="h-speed-sub">per speluur</div>
+      </div>
+    </div>
+
+    <div class="hub">
+      <a class="hub-card" href="/clock" data-audience="shown">
+        <div class="kicker">Op de projector</div>
+        <h2>Klok</h2>
+        <p>De speltijd van 09:00 tot 19:00, met de handelsuren en de casino-uren erbij. Rolt om 19:00 terug naar 09:00.</p>
+      </a>
+      <a class="hub-card" href="/market" data-audience="shown">
+        <div class="kicker">Op de projector</div>
+        <h2>Beursbord</h2>
+        <p>De grafiek en de koersen die de kinderen zien. Geen knoppen — hier valt niets te verhandelen.</p>
+      </a>
+      <a class="hub-card" href="/desk" data-audience="hidden">
+        <div class="kicker">Alleen de dealer</div>
+        <h2>Dealerbalie</h2>
+        <p>Het bonnetje waarmee je koopt en verkoopt voor de kinderen, plus het volledige boek.</p>
+      </a>
+      <a class="hub-card" href="/private" data-audience="hidden">
+        <div class="kicker">Alleen de zakenman</div>
+        <h2>Privé aandelen</h2>
+        <p>Zijn eigen aandelen, zonder grafiek — grote cijfers om voor te lezen aan wie langskomt.</p>
+      </a>
+      <a class="hub-card" href="/admin" data-audience="hidden">
+        <div class="kicker">Alleen de spelleiding</div>
+        <h2>Admin</h2>
+        <p>Bedrijven toevoegen of schrappen, de dagindeling zetten, en koersen omhoog of omlaag duwen.</p>
+      </a>
+    </div>
+
+    <section class="card" style="margin-top: 16px;">
+      <div class="card-head"><h2>Grootste bewegers vandaag</h2></div>
+      <div class="movers" id="movers"></div>
+      <div class="empty" id="movers-empty" hidden>Nog geen bedrijven genoteerd.</div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { connect, durationText, el, gameDuration, mountChrome, onState, pct, signClass } from '/js/common.js';
+    import { setText } from '/js/dom.js';
+
+    const $ = (id) => document.getElementById(id);
+
+    mountChrome('home');
+    connect();
+
+    onState((s) => {
+      const c = s.clock;
+      setText($('h-time'), c.time);
+      setText($('h-day'), `Speldag ${c.day}${c.running ? '' : ' · gepauzeerd'}`);
+
+      const ex = c.sessions.exchangeOpen;
+      setText($('h-exchange'), ex ? 'Open' : 'Dicht', `value ${ex ? 'up' : 'down'}`);
+      const exIn = gameDuration(c.sessions.exchangeChangesIn);
+      setText($('h-exchange-sub'), `${c.sessions.exchangeLabel}${exIn ? ` · ${ex ? 'dicht' : 'open'} over ${exIn}` : ''}`);
+
+      const ca = c.sessions.casinoOpen;
+      setText($('h-casino'), ca ? 'Open' : 'Dicht', `value ${ca ? 'up' : 'down'}`);
+      const caIn = gameDuration(c.sessions.casinoChangesIn);
+      setText($('h-casino-sub'), `${c.sessions.casinoLabel}${caIn ? ` · ${ca ? 'dicht' : 'open'} over ${caIn}` : ''}`);
+
+      setText($('h-speed'), durationText(c.realSecondsPerGameHour));
+      setText($('h-speed-sub'), `echte tijd per speluur · dag = ${durationText(c.realSecondsPerDay)}`);
+
+      const movers = s.businesses
+        .map((b) => ({ b, change: b.dayOpen ? ((b.price - b.dayOpen) / b.dayOpen) * 100 : 0 }))
+        .sort((a, z) => Math.abs(z.change) - Math.abs(a.change))
+        .slice(0, 6);
+
+      const host = $('movers');
+      $('movers-empty').hidden = movers.length > 0;
+      host.textContent = '';
+      for (const m of movers) {
+        host.appendChild(el('div', { class: 'mover' }, [
+          el('span', { class: 'swatch', style: `background:${m.b.color}` }),
+          el('span', { class: 'sym', text: m.b.symbol }),
+          el('span', { class: 'co-name', text: `${m.b.name}${m.b.market === 'private' ? ' · privé' : ''}` }),
+          el('span', { class: `m-val ${signClass(m.change)}`, text: `${m.b.price.toFixed(2)}  ${pct(m.change)}` }),
+        ]));
+      }
+    });
+  </script>
+</body>
+</html>

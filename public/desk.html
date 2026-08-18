@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dealer · Beurs</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .ticket-price {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+    }
+    .ticket-price .p { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+    .qty-row { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .qty-row button { flex: 1; min-width: 40px; padding-left: 4px; padding-right: 4px; }
+
+    .ticket-summary {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+      margin-top: 10px;
+    }
+    .ticket-summary strong { font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+
+    .trade-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .trade-actions button { padding: 12px; font-size: 15px; font-weight: 600; }
+
+    .closed-note {
+      margin-top: 10px;
+      font-size: 12px;
+      border: 1px solid rgba(208, 59, 59, 0.4);
+      background: rgba(208, 59, 59, 0.08);
+      color: #f08a8a;
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+    }
+
+    .tag {
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+    .tag[data-market='private'] { color: var(--warning); border-color: rgba(250, 178, 25, 0.4); }
+
+    .trades { max-height: 320px; overflow: auto; }
+    .trades td { padding: 7px 8px; }
+  </style>
+</head>
+<body>
+  <header class="topbar"></header>
+
+  <main class="page">
+    <div class="page-head">
+      <div>
+        <h1>Dealerbalie</h1>
+        <p>Hier boek je wat de kinderen komen kopen en verkopen. Dit scherm hangt niet op de projector.</p>
+      </div>
+    </div>
+
+    <div class="stat-row" style="margin-bottom: 16px;">
+      <div class="stat">
+        <div class="label">Waarde boek</div>
+        <div class="value num" id="s-equity">–</div>
+        <div class="sub" id="s-equity-sub">muntjes</div>
+      </div>
+      <div class="stat">
+        <div class="label">Muntjes in kas</div>
+        <div class="value num" id="s-cash">–</div>
+        <div class="sub">koopkracht</div>
+      </div>
+      <div class="stat">
+        <div class="label">In aandelen</div>
+        <div class="value num" id="s-invested">–</div>
+        <div class="sub" id="s-invested-sub">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Open winst/verlies</div>
+        <div class="value num" id="s-unreal">–</div>
+        <div class="sub" id="s-real-sub">–</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <section class="card">
+          <div class="card-head">
+            <h2>Alle koersen</h2>
+            <span class="muted">Klik een rij om ze in het bonnetje te zetten</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Bedrijf</th><th>Koers</th><th>Verschil</th><th>%</th>
+                <th>Laagste</th><th>Hoogste</th><th>In bezit</th>
+              </tr>
+            </thead>
+            <tbody id="prices-body"></tbody>
+          </table>
+          <div class="empty" id="prices-empty" hidden>Nog geen bedrijven.</div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Posities</h2></div>
+          <table>
+            <thead>
+              <tr><th>Bedrijf</th><th>Aantal</th><th>Gem. aankoop</th><th>Koers</th><th>Winst/verlies</th></tr>
+            </thead>
+            <tbody id="holdings-body"></tbody>
+          </table>
+          <div class="empty" id="holdings-empty">Nog geen posities.</div>
+        </section>
+      </div>
+
+      <div>
+        <section class="card">
+          <div class="card-head"><h2>Bonnetje</h2></div>
+          <div class="field">
+            <label for="t-business">Bedrijf</label>
+            <select id="t-business"></select>
+          </div>
+          <div class="ticket-price">
+            <div>
+              <div class="muted" style="font-size: 11px;">Koers nu</div>
+              <div class="p" id="t-price">–</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="muted" style="font-size: 11px;">Vandaag</div>
+              <div class="num" id="t-change">–</div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="t-qty">Aantal aandelen</label>
+            <input type="number" id="t-qty" min="1" step="1" value="1" />
+          </div>
+          <div class="qty-row">
+            <button class="sm" data-qty="1">1</button>
+            <button class="sm" data-qty="5">5</button>
+            <button class="sm" data-qty="10">10</button>
+            <button class="sm" data-fraction="0.25">25%</button>
+            <button class="sm" data-fraction="0.5">50%</button>
+            <button class="sm" data-fraction="1">Alles</button>
+          </div>
+          <div class="ticket-summary"><span>Kost</span><strong id="t-cost">–</strong></div>
+          <div class="ticket-summary" style="border-top: none; padding-top: 0;"><span>Kas daarna</span><strong id="t-after">–</strong></div>
+          <div class="trade-actions">
+            <button class="buy" id="btn-buy">Kopen</button>
+            <button class="sell" id="btn-sell">Verkopen</button>
+          </div>
+          <div class="muted" id="t-hint" style="font-size: 12px; margin-top: 8px;"></div>
+          <div class="closed-note" id="t-closed" hidden>–</div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Laatste transacties</h2></div>
+          <div class="trades">
+            <table>
+              <thead><tr><th>Tijd</th><th>Wat</th><th>Aantal</th><th>Koers</th></tr></thead>
+              <tbody id="trades-body"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="trades-empty">Nog niets verhandeld.</div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/js/desk.js"></script>
+</body>
+</html>

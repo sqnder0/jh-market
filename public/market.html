@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Beursbord</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    /* This page goes on the projector: everything a step larger than usual. */
+    .board-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .board-banner[data-open='false'] { border-color: rgba(208, 59, 59, 0.4); background: rgba(208, 59, 59, 0.07); }
+    .board-banner .state { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
+    .board-banner .state.open { color: #6fdc6f; }
+    .board-banner .state.shut { color: #f08a8a; }
+    .board-banner .detail { color: var(--text-secondary); font-size: 14px; }
+    .board-banner .spacer { margin-left: auto; }
+
+    canvas.chart { height: 46vh; min-height: 320px; }
+
+    .board-table td { padding: 12px 10px; font-size: 17px; }
+    .board-table th { font-size: 12px; }
+    .board-table .sym { font-size: 19px; font-weight: 700; }
+    .board-table .co-name { font-size: 14px; }
+    .board-table .swatch { width: 14px; height: 14px; border-radius: 4px; }
+    .board-table .price { font-size: 22px; font-weight: 650; }
+    .board-table .chg { font-size: 17px; font-weight: 600; }
+
+    .legend-item { font-size: 14px; padding: 7px 13px; }
+  </style>
+</head>
+<body>
+  <header class="topbar"></header>
+
+  <main class="page">
+    <div class="board-banner" id="banner">
+      <span class="state" id="banner-state">–</span>
+      <span class="detail" id="banner-detail">–</span>
+      <span class="spacer"></span>
+      <span class="detail" id="banner-casino">–</span>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="chart-title">Koersen · vandaag</h2>
+        <div class="seg" role="group" aria-label="Schaal">
+          <button id="mode-price" aria-pressed="true">Koers</button>
+          <button id="mode-percent" aria-pressed="false">% sinds opening</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas class="chart" id="chart" role="img"
+          aria-label="Lijngrafiek van de beurskoersen doorheen de dag. De tabel eronder toont dezelfde cijfers."></canvas>
+        <div class="chart-tooltip" id="tooltip" data-show="false"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Koersen</h2>
+        <span class="muted">Kopen en verkopen doe je bij de dealer</span>
+      </div>
+      <table class="board-table">
+        <thead>
+          <tr>
+            <th>Bedrijf</th>
+            <th>Koers</th>
+            <th>Verschil</th>
+            <th>%</th>
+            <th>Laagste</th>
+            <th>Hoogste</th>
+            <th>Opening</th>
+          </tr>
+        </thead>
+        <tbody id="prices-body"></tbody>
+      </table>
+      <div class="empty" id="prices-empty" hidden>Nog geen bedrijven op de beurs.</div>
+    </section>
+  </main>
+
+  <script type="module" src="/js/market.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "jh-market",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Beurssimulatie voor een live spel: speelklok, koersenbord, dealerbalie, priv\u00e9 aandelen en een adminpaneel.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  }
+}

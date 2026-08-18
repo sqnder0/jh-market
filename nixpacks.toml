@@ -1,0 +1,15 @@
+# The app has no runtime dependencies and no bundler, so the build is just
+# "install (nothing) and run the tests". Node serves the static files itself.
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci --no-audit --no-fund"]
+
+[phases.build]
+cmds = ["npm test"]
+
+[start]
+cmd = "node src/server.js"

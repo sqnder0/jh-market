@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privé aandelen</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    /* Deliberately no chart: this is a price list to read out loud. */
+    .private-note {
+      border: 1px solid rgba(250, 178, 25, 0.35);
+      background: rgba(250, 178, 25, 0.07);
+      color: var(--warning);
+      border-radius: var(--radius);
+      padding: 11px 15px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+
+    .quote {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface-1);
+      padding: 18px 20px;
+    }
+    .quote .top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+    .quote .sym { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+    .quote .name { color: var(--text-muted); font-size: 14px; }
+    .quote .price { font-size: 46px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
+    .quote .unit { font-size: 14px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
+    .quote .delta { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 8px; }
+
+    .quote-rows {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .quote-rows .k { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .quote-rows .v { font-variant-numeric: tabular-nums; }
+
+    .quote .held {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar"></header>
+
+  <main class="page" style="max-width: 1200px;">
+    <div class="page-head">
+      <div>
+        <h1>Privé aandelen</h1>
+        <p>Het boek van de zakenman. Niet op de beurs, geen grafiek — je leest de prijzen zelf voor.</p>
+      </div>
+      <span class="pill num" id="p-clock">--:--</span>
+    </div>
+
+    <div class="private-note" id="note">
+      Deze aandelen staan niet op het beursbord en blijven ook buiten de handelsuren verhandelbaar.
+    </div>
+
+    <div class="quotes" id="quotes"></div>
+    <div class="empty" id="quotes-empty" hidden>Nog geen privé aandelen. Voeg er een toe op de adminpagina.</div>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="card-head"><h2>Ter vergelijking · de publieke beurs</h2></div>
+      <table>
+        <thead><tr><th>Bedrijf</th><th>Koers</th><th>%</th></tr></thead>
+        <tbody id="public-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script type="module" src="/js/private.js"></script>
+</body>
+</html>

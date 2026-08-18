@@ -1,0 +1,10 @@
+node_modules/
+
+# Runtime game state — regenerated on first boot.
+data/
+
+*.log
+.DS_Store
+
+# Local Claude Code permissions, not part of the project.
+.claude/settings.local.json
