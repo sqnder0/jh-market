@@ -7,87 +7,307 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/css/app.css" />
   <style>
-    /* This page goes on the projector: everything a step larger than usual. */
-    .board-banner {
+    /* A wall board on a projector: exactly one screen, never scrolls, no
+       chrome, and every number sized to be read from the back of the room. */
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--plane); }
+
+    .board {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 0.9vh;
+      padding: 1.1vh 1.1vw;
+    }
+
+    /* --- header ---------------------------------------------------------- */
+
+    .board-head {
       display: flex;
       align-items: center;
-      gap: 14px;
-      padding: 12px 18px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
+      gap: 1.6vw;
+      padding: 0.9vh 1.4vw;
       background: var(--surface-1);
-      margin-bottom: 16px;
-      flex-wrap: wrap;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
     }
-    .board-banner[data-open='false'] { border-color: rgba(208, 59, 59, 0.4); background: rgba(208, 59, 59, 0.07); }
-    .board-banner .state { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
-    .board-banner .state.open { color: #6fdc6f; }
-    .board-banner .state.shut { color: #f08a8a; }
-    .board-banner .detail { color: var(--text-secondary); font-size: 14px; }
-    .board-banner .spacer { margin-left: auto; }
 
-    canvas.chart { height: 46vh; min-height: 320px; }
+    .board-mark {
+      display: flex;
+      align-items: baseline;
+      gap: 0.7vw;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      font-size: clamp(18px, 2.1vw, 40px);
+      white-space: nowrap;
+    }
+    .board-mark .sub {
+      font-size: clamp(10px, 0.78vw, 15px);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
 
-    .board-table td { padding: 12px 10px; font-size: 17px; }
-    .board-table th { font-size: 12px; }
-    .board-table .sym { font-size: 19px; font-weight: 700; }
-    .board-table .co-name { font-size: 14px; }
-    .board-table .swatch { width: 14px; height: 14px; border-radius: 4px; }
-    .board-table .price { font-size: 22px; font-weight: 650; }
-    .board-table .chg { font-size: 17px; font-weight: 600; }
+    .board-sessions { display: flex; gap: 0.7vw; }
 
-    .legend-item { font-size: 14px; padding: 7px 13px; }
+    .board-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5vw;
+      padding: 0.5vh 1vw;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: clamp(11px, 1.05vw, 21px);
+      font-weight: 650;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+    .board-badge .dot { width: 0.7vw; height: 0.7vw; min-width: 8px; min-height: 8px; border-radius: 50%; }
+    .board-badge[data-open='true'] { border-color: rgba(12,163,12,0.5); background: rgba(12,163,12,0.10); color: #6fdc6f; }
+    .board-badge[data-open='true'] .dot { background: var(--up); }
+    .board-badge[data-open='false'] { border-color: rgba(208,59,59,0.45); background: rgba(208,59,59,0.08); color: #f08a8a; }
+    .board-badge[data-open='false'] .dot { background: var(--down); }
+
+    .board-when { margin-left: auto; display: flex; align-items: baseline; gap: 1.1vw; white-space: nowrap; }
+    .board-when .day {
+      font-size: clamp(11px, 0.95vw, 19px);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .board-when .time {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(30px, 4vw, 84px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    /* --- main ------------------------------------------------------------ */
+
+    .board-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(260px, 25vw, 520px);
+      gap: 0.9vw;
+      min-height: 0;
+    }
+
+    .board-panel {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1vh 1vw;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-title {
+      font-size: clamp(10px, 0.8vw, 15px);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.8vh;
+      display: flex;
+      justify-content: space-between;
+      gap: 1vw;
+    }
+
+    .chart-wrap { position: relative; flex: 1; min-height: 0; }
+    canvas.chart { width: 100%; height: 100%; }
+
+    /* --- quote rows ------------------------------------------------------ */
+
+    .quotes { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0.4vh; }
+
+    .quote-row {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 0.6vw 1fr auto;
+      align-items: center;
+      gap: 0.6vw;
+      padding: 0 0.6vw;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      transition: background 500ms ease-out;
+    }
+    .quote-row .bar { width: 100%; height: 55%; border-radius: 2px; }
+    .quote-row .who { min-width: 0; }
+    .quote-row .sym {
+      font-size: clamp(15px, 1.6vw, 34px);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+    }
+    .quote-row .co {
+      font-size: clamp(9px, 0.75vw, 15px);
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .quote-row .nums { text-align: right; }
+    .quote-row .px {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(17px, 1.9vw, 40px);
+      font-weight: 650;
+      line-height: 1.05;
+    }
+    .quote-row .chg {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(11px, 1vw, 20px);
+      font-weight: 600;
+    }
+
+    /* A tick repaints the row for half a second, the way a real board does. */
+    .quote-row[data-tick='up'] { background: rgba(12, 163, 12, 0.18); transition: none; }
+    .quote-row[data-tick='down'] { background: rgba(208, 59, 59, 0.18); transition: none; }
+
+    /* --- ticker tape ----------------------------------------------------- */
+
+    .tape {
+      overflow: hidden;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.75vh 0;
+      white-space: nowrap;
+    }
+    .tape-track {
+      display: inline-flex;
+      will-change: transform;
+      animation: tape-roll var(--tape-duration, 40s) linear infinite;
+    }
+    .tape[data-paused='true'] .tape-track { animation-play-state: paused; }
+    @keyframes tape-roll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .tape-track { animation: none; } }
+
+    .tape-run { display: inline-flex; align-items: center; }
+
+    .tape-item {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.5vw;
+      padding: 0 1.5vw;
+      font-size: clamp(13px, 1.25vw, 26px);
+      white-space: nowrap;
+    }
+    .tape-item .t-sym { font-weight: 700; letter-spacing: 0.02em; }
+    .tape-item .t-px, .tape-item .t-chg { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .tape-item .t-chg { font-weight: 600; }
+    .tape-sep { color: var(--surface-3); font-size: clamp(13px, 1.25vw, 26px); }
+
+    /* --- shut overlay ---------------------------------------------------- */
+
+    .shut-note {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(13, 13, 13, 0.88);
+      border: 1px solid rgba(208, 59, 59, 0.45);
+      color: #f08a8a;
+      border-radius: var(--radius);
+      padding: 1.4vh 2vw;
+      font-size: clamp(14px, 1.5vw, 30px);
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-align: center;
+      pointer-events: none;
+    }
+    .shut-note .small {
+      display: block;
+      margin-top: 0.5vh;
+      font-size: clamp(10px, 0.85vw, 17px);
+      font-weight: 400;
+      color: var(--text-muted);
+      letter-spacing: 0;
+    }
+
+    /* --- operator controls: invisible until the mouse moves -------------- */
+
+    .board-controls {
+      position: fixed;
+      top: 0.8vh;
+      right: 0.8vw;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 200ms ease-out;
+      z-index: 30;
+    }
+    .board-controls[data-show='true'] { opacity: 1; }
+    .board-controls a, .board-controls button {
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-3);
+      color: var(--text-primary);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .empty-board {
+      margin: auto;
+      color: var(--text-muted);
+      font-size: clamp(13px, 1.2vw, 24px);
+    }
   </style>
 </head>
 <body>
-  <header class="topbar"></header>
+  <div class="board">
+    <header class="board-head">
+      <div class="board-mark">Beurs <span class="sub">Live</span></div>
+      <div class="board-sessions">
+        <span class="board-badge" id="badge-beurs"><span class="dot"></span><span id="badge-beurs-text">Beurs</span></span>
+        <span class="board-badge" id="badge-casino"><span class="dot"></span><span id="badge-casino-text">Casino</span></span>
+      </div>
+      <div class="board-when">
+        <span class="day" id="board-day">Dag –</span>
+        <span class="time" id="board-time">--:--</span>
+      </div>
+    </header>
 
-  <main class="page">
-    <div class="board-banner" id="banner">
-      <span class="state" id="banner-state">–</span>
-      <span class="detail" id="banner-detail">–</span>
-      <span class="spacer"></span>
-      <span class="detail" id="banner-casino">–</span>
-    </div>
-
-    <section class="card">
-      <div class="card-head">
-        <h2 id="chart-title">Koersen · vandaag</h2>
-        <div class="seg" role="group" aria-label="Schaal">
-          <button id="mode-price" aria-pressed="true">Koers</button>
-          <button id="mode-percent" aria-pressed="false">% sinds opening</button>
+    <main class="board-main">
+      <section class="board-panel">
+        <div class="panel-title">
+          <span id="chart-title">Koersen vandaag</span>
+          <span id="chart-window">–</span>
         </div>
-      </div>
-      <div class="chart-wrap">
-        <canvas class="chart" id="chart" role="img"
-          aria-label="Lijngrafiek van de beurskoersen doorheen de dag. De tabel eronder toont dezelfde cijfers."></canvas>
-        <div class="chart-tooltip" id="tooltip" data-show="false"></div>
-      </div>
-      <div class="legend" id="legend"></div>
-    </section>
+        <div class="chart-wrap">
+          <canvas class="chart" id="chart" role="img"
+            aria-label="Lijngrafiek van de beurskoersen doorheen de dag. De koerslijst ernaast toont dezelfde cijfers."></canvas>
+          <div class="chart-tooltip" id="tooltip" data-show="false"></div>
+          <div class="shut-note" id="shut-note" hidden>
+            BEURS DICHT
+            <span class="small" id="shut-detail">–</span>
+          </div>
+        </div>
+      </section>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Koersen</h2>
-        <span class="muted">Kopen en verkopen doe je bij de dealer</span>
-      </div>
-      <table class="board-table">
-        <thead>
-          <tr>
-            <th>Bedrijf</th>
-            <th>Koers</th>
-            <th>Verschil</th>
-            <th>%</th>
-            <th>Laagste</th>
-            <th>Hoogste</th>
-            <th>Opening</th>
-          </tr>
-        </thead>
-        <tbody id="prices-body"></tbody>
-      </table>
-      <div class="empty" id="prices-empty" hidden>Nog geen bedrijven op de beurs.</div>
-    </section>
-  </main>
+      <section class="board-panel">
+        <div class="panel-title"><span>Koersen</span><span>t.o.v. opening</span></div>
+        <div class="quotes" id="quotes"></div>
+        <div class="empty-board" id="quotes-empty" hidden>Nog geen bedrijven op de beurs.</div>
+      </section>
+    </main>
+
+    <footer class="tape" id="tape">
+      <div class="tape-track" id="tape-track"></div>
+    </footer>
+  </div>
+
+  <div class="board-controls" id="controls" data-show="false">
+    <button id="btn-mode" type="button">% weergave</button>
+    <button id="btn-full" type="button">Volledig scherm</button>
+    <a href="/">Hub</a>
+  </div>
 
   <script type="module" src="/js/market.js"></script>
 </body>

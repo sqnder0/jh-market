@@ -20,7 +20,7 @@ PORT=8080 npm start
 
 | URL | Access | What it is |
 |---|---|---|
-| `/market` | **open** | The board: price chart and quotes. Read only — no buttons |
+| `/market` | **open** | The wall board: chart, quotes and ticker tape. Read only |
 | `/login` | open | Password prompt for everything else |
 | `/` | password | Hub: live status and links to everything |
 | `/clock` | password | The game clock, 09:00 → 19:00, with the beurs and casino windows |
@@ -28,11 +28,27 @@ PORT=8080 npm start
 | `/private` | password | The businessman's private shares, deliberately no chart |
 | `/admin` | password | Businesses, day schedule, clock speed, price pushes |
 
+## The wall board
+
+`/market` is built for one job: hanging on a projector for the whole game. It is
+a single screen that never scrolls — header, chart, quote panel and a rolling
+ticker tape — with no navigation and nothing to click. Type is sized in viewport
+units, so it scales itself to whatever it is thrown at, and the chart's axes
+and strokes scale with it.
+
+A quote row flashes green or red for half a second whenever its price moves, so
+the room can see the market is alive. When the beurs shuts the chart greys out
+the closed stretch and says so across the middle, and the flashing stops with
+the prices.
+
+Move the mouse and three controls fade in at the top right — a price/percent
+toggle, full screen, and a link back to the hub — then fade out again. Keyboard:
+**F** for full screen, **P** to toggle the scale. On the projector nobody
+touches the mouse, so nothing ever appears.
+
 ## Access
 
-`/market` is deliberately wide open — it is meant to hang full-screen on a wall
-like a Wall Street ticker, with nobody logged in. Logged out, the page drops its
-navigation bar and shows only the brand, the clock and the session pills.
+`/market` is deliberately wide open, since it has to run with nobody logged in.
 
 Everything else needs one shared password, set with `AUTH_PASSWORD`
 (default `jenneissexy`). Log in once per device at `/login`; the cookie is

@@ -1,5 +1,9 @@
-// Canvas line chart for the trading day: fixed 09:00-24:00 x-domain that fills
-// in as the day runs, auto-scaled y, crosshair + tooltip, right-edge labels.
+// Canvas line chart for the trading day: fixed x-domain covering the whole day
+// that fills in as it runs, auto-scaled y, crosshair + tooltip, right-edge
+// labels, and shaded stretches where the exchange is shut.
+//
+// `setScale` multiplies every piece of chrome — type, strokes, markers,
+// padding — so the same chart reads on a laptop and across a hall.
 
 import { minuteLabel } from './common.js';
 
@@ -8,13 +12,12 @@ const INK = {
   axis: '#383835',
   muted: '#898781',
   text: '#ffffff',
-  secondary: '#c3c2b7',
   surface: '#1a1a19',
   chip: '#2a2927',
 };
 
-const PAD = { top: 14, right: 78, bottom: 26, left: 8 };
-const Y_LABEL_W = 56;
+const BASE_PAD = { top: 14, right: 78, bottom: 26, left: 8 };
+const BASE_Y_LABEL_W = 56;
 const MAX_DIRECT_LABELS = 4;
 
 function niceTicks(min, max, count = 5) {
@@ -26,8 +29,10 @@ function niceTicks(min, max, count = 5) {
   }
   const raw = (max - min) / count;
   const mag = 10 ** Math.floor(Math.log10(raw));
+  // Pick the nicest step nearest the ideal rather than always rounding up —
+  // rounding up turns a 5.1 into a 10 and leaves the axis with two gridlines.
   const norm = raw / mag;
-  const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
+  const step = mag * ([1, 2, 2.5, 5].find((candidate) => norm <= candidate * 1.15) ?? 10);
   const ticks = [];
   for (let t = Math.ceil(min / step) * step; t <= max + step * 0.001; t += step) {
     ticks.push(Math.round(t / step) * step);
@@ -40,9 +45,19 @@ export function createChart(canvas, tooltipEl) {
   let series = [];
   let domainMax = 600;
   let mode = 'price';
-  let closedRanges = []; // [[fromIndex, toIndex], ...] — exchange shut
+  let scale = 1;
   let hoverIndex = null;
+  let closedRanges = []; // [[fromIndex, toIndex], ...] — exchange shut
   let box = { w: 0, h: 0 };
+
+  const pad = () => ({
+    top: BASE_PAD.top * scale,
+    right: BASE_PAD.right * scale,
+    bottom: BASE_PAD.bottom * scale,
+    left: BASE_PAD.left * scale,
+  });
+  const labelWidth = () => BASE_Y_LABEL_W * scale;
+  const mono = (size) => `${Math.round(size * scale)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
 
   function value(s, i) {
     const v = s.values[i];
@@ -55,17 +70,13 @@ export function createChart(canvas, tooltipEl) {
   }
 
   function fmt(v) {
-    if (mode === 'percent') return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+    if (mode === 'percent') return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
     return v >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : v.toFixed(2);
   }
 
   function plot() {
-    return {
-      x0: PAD.left,
-      x1: box.w - PAD.right,
-      y0: PAD.top,
-      y1: box.h - PAD.bottom,
-    };
+    const p = pad();
+    return { x0: p.left, x1: box.w - p.right, y0: p.top, y1: box.h - p.bottom, p };
   }
 
   function yDomain(visible) {
@@ -81,13 +92,13 @@ export function createChart(canvas, tooltipEl) {
     }
     if (!Number.isFinite(min)) return { min: 0, max: 1 };
     if (min === max) {
-      const pad = Math.abs(min) * 0.02 || 1;
-      return { min: min - pad, max: max + pad };
+      const p = Math.abs(min) * 0.02 || 1;
+      return { min: min - p, max: max + p };
     }
-    const pad = (max - min) * 0.08;
+    const p = (max - min) * 0.08;
     // A price axis must never dip below zero; a percent axis may.
     const floor = mode === 'price' ? 0 : -Infinity;
-    return { min: Math.max(floor, min - pad), max: max + pad };
+    return { min: Math.max(floor, min - p), max: max + p };
   }
 
   function resize() {
@@ -101,9 +112,10 @@ export function createChart(canvas, tooltipEl) {
 
   function render() {
     if (box.w === 0) resize();
-    const { x0, x1, y0, y1 } = plot();
-    const innerW = x1 - x0 - Y_LABEL_W;
-    const px0 = x0 + Y_LABEL_W;
+    const { x0, x1, y0, y1, p } = plot();
+    const labelW = labelWidth();
+    const innerW = x1 - x0 - labelW;
+    const px0 = x0 + labelW;
     ctx.clearRect(0, 0, box.w, box.h);
     if (innerW <= 0 || y1 <= y0) return;
 
@@ -123,17 +135,17 @@ export function createChart(canvas, tooltipEl) {
       if (b <= a) continue;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
       ctx.fillRect(a, y0, b - a, y1 - y0);
-      if (b - a > 54) {
+      if (b - a > 54 * scale) {
         ctx.fillStyle = INK.muted;
-        ctx.font = '10px system-ui, sans-serif';
+        ctx.font = `${Math.round(10 * scale)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText('beurs dicht', (a + b) / 2, y0 + 4);
+        ctx.fillText('beurs dicht', (a + b) / 2, y0 + 4 * scale);
       }
     }
 
     // horizontal grid + y labels
-    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.font = mono(11);
     ctx.textBaseline = 'middle';
     for (const t of ticks) {
       const y = Math.round(yAt(t)) + 0.5;
@@ -146,7 +158,7 @@ export function createChart(canvas, tooltipEl) {
       ctx.stroke();
       ctx.fillStyle = INK.muted;
       ctx.textAlign = 'right';
-      ctx.fillText(fmt(t), px0 - 8, y);
+      ctx.fillText(fmt(t), px0 - 8 * scale, y);
     }
 
     // zero reference line in percent mode
@@ -163,27 +175,29 @@ export function createChart(canvas, tooltipEl) {
     // hour gridlines + x labels
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const hourStep = innerW < 480 ? 180 : 60;
+    const hourStep = innerW / (domainMax / 60) < 46 * scale ? 120 : 60;
     for (let m = 0; m <= domainMax; m += hourStep) {
       const x = Math.round(xAt(m)) + 0.5;
       ctx.strokeStyle = INK.grid;
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, y0);
       ctx.lineTo(x, y1);
       ctx.stroke();
       ctx.fillStyle = INK.muted;
-      ctx.fillText(minuteLabel(m), x, y1 + 7);
+      ctx.fillText(minuteLabel(m), x, y1 + 7 * scale);
     }
 
     // baseline
     ctx.strokeStyle = INK.axis;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(px0, Math.round(y1) + 0.5);
     ctx.lineTo(x1, Math.round(y1) + 0.5);
     ctx.stroke();
 
     // series lines
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * scale;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     for (const s of visible) {
@@ -209,10 +223,10 @@ export function createChart(canvas, tooltipEl) {
       const x = xAt(i);
       const y = yAt(v);
       ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.arc(x, y, 4 * scale, 0, Math.PI * 2);
       ctx.fillStyle = s.color;
       ctx.fill();
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * scale;
       ctx.strokeStyle = INK.surface;
       ctx.stroke();
       ends.push({ s, x, y, v });
@@ -221,31 +235,32 @@ export function createChart(canvas, tooltipEl) {
     // direct labels at the right edge, nudged apart so they never collide
     if (ends.length && ends.length <= MAX_DIRECT_LABELS) {
       ends.sort((a, b) => a.y - b.y);
-      const gap = 17;
+      const gap = 17 * scale;
       for (let i = 1; i < ends.length; i++) {
         if (ends[i].y - ends[i - 1].y < gap) ends[i].y = ends[i - 1].y + gap;
       }
       const overflow = ends[ends.length - 1].y - y1;
       if (overflow > 0) for (const e of ends) e.y -= overflow;
 
-      ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.font = mono(11);
       ctx.textBaseline = 'middle';
+      const h = 16 * scale;
       for (const e of ends) {
         const label = `${e.s.symbol} ${fmt(e.v)}`;
-        const w = Math.min(ctx.measureText(label).width + 14, PAD.right - 6);
-        const x = x1 + 4;
+        const w = Math.min(ctx.measureText(label).width + 14 * scale, p.right - 6 * scale);
+        const x = x1 + 4 * scale;
         const y = Math.round(e.y);
         ctx.fillStyle = INK.chip;
         ctx.beginPath();
-        ctx.roundRect(x, y - 8, w, 16, 4);
+        ctx.roundRect(x, y - h / 2, w, h, 4 * scale);
         ctx.fill();
         ctx.fillStyle = e.s.color;
         ctx.beginPath();
-        ctx.roundRect(x, y - 8, 3, 16, [4, 0, 0, 4]);
+        ctx.roundRect(x, y - h / 2, 3 * scale, h, [4 * scale, 0, 0, 4 * scale]);
         ctx.fill();
         ctx.fillStyle = INK.text;
         ctx.textAlign = 'left';
-        ctx.fillText(label, x + 7, y + 0.5);
+        ctx.fillText(label, x + 7 * scale, y + 0.5);
       }
     }
 
@@ -264,10 +279,10 @@ export function createChart(canvas, tooltipEl) {
         const v = value(s, hoverIndex);
         if (v === undefined) continue;
         ctx.beginPath();
-        ctx.arc(x, yAt(v), 4, 0, Math.PI * 2);
+        ctx.arc(x, yAt(v), 4 * scale, 0, Math.PI * 2);
         ctx.fillStyle = s.color;
         ctx.fill();
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * scale;
         ctx.strokeStyle = INK.surface;
         ctx.stroke();
       }
@@ -298,18 +313,17 @@ export function createChart(canvas, tooltipEl) {
     let left = clientX - rect.left + 14;
     if (left + w > rect.width) left = clientX - rect.left - w - 14;
     tooltipEl.style.left = `${Math.max(0, left)}px`;
-    tooltipEl.style.top = `${PAD.top}px`;
+    tooltipEl.style.top = `${pad().top}px`;
   }
 
   function pointerMove(event) {
     const rect = canvas.getBoundingClientRect();
     const { x1 } = plot();
-    const px0 = PAD.left + Y_LABEL_W;
+    const px0 = pad().left + labelWidth();
     const innerW = x1 - px0;
     const maxIndex = Math.max(0, ...series.map((s) => s.values.length - 1));
     const rel = (event.clientX - rect.left - px0) / innerW;
-    const idx = Math.round(rel * domainMax);
-    hoverIndex = Math.max(0, Math.min(maxIndex, idx));
+    hoverIndex = Math.max(0, Math.min(maxIndex, Math.round(rel * domainMax)));
     render();
     showTooltip(event.clientX);
   }
@@ -331,6 +345,7 @@ export function createChart(canvas, tooltipEl) {
     setClosedRanges(next) { closedRanges = next; },
     setMode(next) { mode = next; },
     setDomainMax(next) { domainMax = next; },
+    setScale(next) { scale = next; },
     render,
     destroy() { ro.disconnect(); },
   };
@@ -350,10 +365,10 @@ export function drawSparkline(canvas, values, color = '#3987e5') {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || Math.abs(max) * 0.01 || 1;
-  const pad = 4;
-  const h = rect.height - pad * 2;
+  const padY = 4;
+  const h = rect.height - padY * 2;
   const xAt = (i) => (i / (values.length - 1)) * rect.width;
-  const yAt = (v) => pad + h - ((v - min) / span) * h;
+  const yAt = (v) => padY + h - ((v - min) / span) * h;
 
   ctx.beginPath();
   ctx.moveTo(xAt(0), yAt(values[0]));

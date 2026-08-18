@@ -1,32 +1,37 @@
-// The kids' board: chart + prices, read only. No trading happens here — the
-// dealer does that on /desk.
+// The wall board. Read only, one screen, no navigation — this is what hangs on
+// the projector while the game runs, so it has to survive being left alone for
+// two hours and still be legible from the back of the room.
 
-import { arrow, connect, el, gameDuration, mountChrome, onState, pct, signClass, store } from './common.js';
+import { arrow, connect, el, gameDuration, onState, pct, signClass, store } from './common.js';
 import { createChart } from './chart.js';
-import { syncRows, setText } from './dom.js';
-
-mountChrome('market');
+import { setText, syncRows } from './dom.js';
 
 const $ = (id) => document.getElementById(id);
 
 const chart = createChart($('chart'), $('tooltip'));
-const hidden = new Set(JSON.parse(localStorage.getItem('hiddenSeries') || '[]'));
-let mode = localStorage.getItem('chartMode') || 'price';
+let mode = localStorage.getItem('boardMode') || 'price';
+
+// Last price we drew per listing, so a change can flash the row green or red.
+const lastPrice = new Map();
+const flashTimers = new Map();
+
+const publicListings = (s) => s.businesses.filter((b) => b.market === 'public');
+
+// --- chart -----------------------------------------------------------------
+
+/** Chrome scales with the viewport so the axes stay readable on a big screen. */
+function chartScale() {
+  return Math.min(2.2, Math.max(1, window.innerWidth / 1100));
+}
 
 function setMode(next) {
   mode = next;
-  localStorage.setItem('chartMode', next);
+  localStorage.setItem('boardMode', next);
   chart.setMode(next);
-  $('mode-price').setAttribute('aria-pressed', String(next === 'price'));
-  $('mode-percent').setAttribute('aria-pressed', String(next === 'percent'));
-  $('chart-title').textContent = next === 'price' ? 'Koersen · vandaag' : 'Verschil sinds opening · vandaag';
+  setText($('chart-title'), next === 'price' ? 'Koersen vandaag' : 'Verschil sinds opening');
+  setText($('btn-mode'), next === 'price' ? '% weergave' : 'Koersweergave');
   chart.render();
 }
-
-$('mode-price').addEventListener('click', () => setMode('price'));
-$('mode-percent').addEventListener('click', () => setMode('percent'));
-
-const publicListings = (s) => s.businesses.filter((b) => b.market === 'public');
 
 /** Stretches of the day, in minute indices, where the exchange is shut. */
 function closedRanges(clock) {
@@ -37,27 +42,8 @@ function closedRanges(clock) {
   return ranges;
 }
 
-function renderBanner(s) {
-  const { sessions } = s.clock;
-  const banner = $('banner');
-  banner.dataset.open = String(sessions.exchangeOpen);
-
-  const state = $('banner-state');
-  setText(state, sessions.exchangeOpen ? 'BEURS OPEN' : 'BEURS DICHT',
-    `state ${sessions.exchangeOpen ? 'open' : 'shut'}`);
-
-  const until = gameDuration(sessions.exchangeChangesIn);
-  setText($('banner-detail'), sessions.exchangeOpen
-    ? `Handelsuren ${sessions.exchangeLabel}${until ? ` · sluit over ${until}` : ''}`
-    : `Handelsuren ${sessions.exchangeLabel}${until ? ` · opent over ${until}` : ' · koersen liggen stil'}`);
-
-  const casinoUntil = gameDuration(sessions.casinoChangesIn);
-  setText($('banner-casino'), sessions.casinoOpen
-    ? `Casino open (${sessions.casinoLabel})${casinoUntil ? ` · sluit over ${casinoUntil}` : ''}`
-    : `Casino ${sessions.casinoLabel}${casinoUntil ? ` · opent over ${casinoUntil}` : ''}`);
-}
-
 function renderChart(s) {
+  chart.setScale(chartScale());
   chart.setDomainMax(s.clock.minutesPerDay);
   chart.setClosedRanges(closedRanges(s.clock));
   chart.setSeries(publicListings(s).map((b) => ({
@@ -66,93 +52,176 @@ function renderChart(s) {
     name: b.name,
     color: b.color,
     values: b.history,
-    visible: !hidden.has(b.id),
+    visible: true,
   })));
   chart.render();
 }
 
-function toggleSeries(id) {
-  if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
-  localStorage.setItem('hiddenSeries', JSON.stringify([...hidden]));
-  render();
+// --- header ----------------------------------------------------------------
+
+function renderHead(s) {
+  const { sessions } = s.clock;
+
+  setText($('board-day'), `Dag ${s.clock.day}`);
+  setText($('board-time'), s.clock.time);
+
+  $('badge-beurs').dataset.open = String(sessions.exchangeOpen);
+  setText($('badge-beurs-text'), sessions.exchangeOpen ? 'Beurs open' : 'Beurs dicht');
+
+  $('badge-casino').dataset.open = String(sessions.casinoOpen);
+  setText($('badge-casino-text'), sessions.casinoOpen ? 'Casino open' : 'Casino dicht');
+
+  setText($('chart-window'), `handelsuren ${sessions.exchangeLabel}`);
+
+  const shut = !sessions.exchangeOpen;
+  $('shut-note').hidden = !shut;
+  if (shut) {
+    const until = gameDuration(sessions.exchangeChangesIn);
+    setText($('shut-detail'), until
+      ? `Koersen liggen stil · opent over ${until}`
+      : 'Koersen liggen stil tot morgen');
+  }
 }
 
-function renderLegend(s) {
+// --- quote rows ------------------------------------------------------------
+
+/** Repaint a row for half a second whenever its price moves. */
+function flash(node, direction) {
+  node.dataset.tick = direction;
+  clearTimeout(flashTimers.get(node));
+  flashTimers.set(node, setTimeout(() => { delete node.dataset.tick; }, 480));
+}
+
+function renderQuotes(s) {
   const listings = publicListings(s);
-  const host = $('legend');
-  // A lone series is named by the chart title, so no legend box is needed.
-  host.hidden = listings.length < 2;
-  syncRows(host, listings, (b) => b.id,
-    (node, b) => {
-      node.className = 'legend-item';
-      node.type = 'button';
-      node.addEventListener('click', () => toggleSeries(b.id));
-      const swatch = el('span', { class: 'swatch' });
-      const sym = el('span', {});
-      const val = el('span', { class: 'lg-val' });
-      const chg = el('span', {});
-      node.append(swatch, sym, val, chg);
-      return { swatch, sym, val, chg };
+  $('quotes-empty').hidden = listings.length > 0;
+
+  syncRows($('quotes'), listings, (b) => b.id,
+    (node) => {
+      node.className = 'quote-row';
+      const refs = {
+        bar: el('div', { class: 'bar' }),
+        sym: el('div', { class: 'sym' }),
+        co: el('div', { class: 'co' }),
+        px: el('div', { class: 'px' }),
+        chg: el('div', { class: 'chg' }),
+      };
+      node.append(
+        refs.bar,
+        el('div', { class: 'who' }, [refs.sym, refs.co]),
+        el('div', { class: 'nums' }, [refs.px, refs.chg]),
+      );
+      return refs;
     },
     (node, c, b) => {
-      node.dataset.off = String(hidden.has(b.id));
-      node.title = `${b.name} — klik om te tonen of te verbergen`;
-      c.swatch.style.background = b.color;
+      c.bar.style.background = b.color;
       setText(c.sym, b.symbol);
-      setText(c.val, b.price.toFixed(2));
-      const change = b.price - b.dayOpen;
-      setText(c.chg, b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : '–', signClass(change));
-    },
-    'button');
-}
+      setText(c.co, b.name);
+      setText(c.px, b.price.toFixed(2));
 
-function renderPrices(s) {
-  const listings = publicListings(s);
-  $('prices-empty').hidden = listings.length > 0;
-  syncRows($('prices-body'), listings, (b) => b.id,
-    (tr, b) => {
-      const swatch = el('span', { class: 'swatch' });
-      const sym = el('span', { class: 'sym' });
-      const name = el('span', { class: 'co-name' });
-      const cells = {
-        swatch, sym, name,
-        price: el('td', { class: 'num price' }),
-        chg: el('td', { class: 'num chg' }),
-        chgPct: el('td', { class: 'num chg' }),
-        low: el('td', { class: 'num muted' }),
-        high: el('td', { class: 'num muted' }),
-        open: el('td', { class: 'num muted' }),
-      };
-      tr.append(
-        el('td', {}, [swatch, sym, name]),
-        cells.price, cells.chg, cells.chgPct, cells.low, cells.high, cells.open,
+      const change = b.price - b.dayOpen;
+      setText(
+        c.chg,
+        `${arrow(change)} ${Math.abs(change).toFixed(2)}  ${b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : ''}`,
+        `chg ${signClass(change)}`,
       );
-      void b;
-      return cells;
+
+      const previous = lastPrice.get(b.id);
+      if (previous !== undefined && previous !== b.price) {
+        flash(node, b.price > previous ? 'up' : 'down');
+      }
+      lastPrice.set(b.id, b.price);
     },
-    (tr, c, b) => {
-      c.swatch.style.background = b.color;
-      setText(c.sym, b.symbol);
-      setText(c.name, ` ${b.name}`);
-      const change = b.price - b.dayOpen;
-      const cls = signClass(change);
-      setText(c.price, b.price.toFixed(2));
-      setText(c.chg, `${arrow(change)} ${Math.abs(change).toFixed(2)}`, `num chg ${cls}`);
-      setText(c.chgPct, b.dayOpen ? pct((change / b.dayOpen) * 100) : '–', `num chg ${cls}`);
-      setText(c.low, b.dayLow.toFixed(2));
-      setText(c.high, b.dayHigh.toFixed(2));
-      setText(c.open, b.dayOpen.toFixed(2));
-    });
+    'div');
 }
 
-function render(s = store) {
-  if (!s.clock) return;
-  renderBanner(s);
-  renderChart(s);
-  renderLegend(s);
-  renderPrices(s);
+// --- ticker tape -----------------------------------------------------------
+
+// The tape is two identical runs translated by -50%, which loops seamlessly.
+// It is rebuilt only when the listing set changes; prices are written in place
+// so the scroll never jumps.
+function buildTape(listings) {
+  const track = $('tape-track');
+  track.textContent = '';
+  if (!listings.length) return;
+
+  for (let copy = 0; copy < 2; copy++) {
+    const run = el('div', { class: 'tape-run', 'aria-hidden': copy === 1 ? 'true' : null });
+    for (const b of listings) {
+      run.append(
+        el('span', { class: 'tape-item', 'data-key': b.id }, [
+          el('span', { class: 'swatch', style: `background:${b.color}` }),
+          el('span', { class: 't-sym', text: b.symbol }),
+          el('span', { class: 't-px' }),
+          el('span', { class: 't-chg' }),
+        ]),
+        el('span', { class: 'tape-sep', text: '·' }),
+      );
+    }
+    track.append(run);
+  }
+
+  // Hold the scroll speed constant however many listings there are.
+  requestAnimationFrame(() => {
+    const width = track.scrollWidth / 2;
+    const seconds = Math.max(18, width / 55);
+    track.style.setProperty('--tape-duration', `${seconds.toFixed(1)}s`);
+  });
 }
+
+function renderTape(s) {
+  const listings = publicListings(s);
+  const track = $('tape-track');
+  const signature = listings.map((b) => `${b.id}:${b.symbol}`).join(',');
+  if (track.dataset.sig !== signature) {
+    track.dataset.sig = signature;
+    buildTape(listings);
+  }
+
+  for (const b of listings) {
+    const change = b.price - b.dayOpen;
+    const changeText = `${arrow(change)} ${b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : '–'}`;
+    for (const item of track.querySelectorAll(`[data-key="${b.id}"]`)) {
+      setText(item.querySelector('.t-px'), b.price.toFixed(2));
+      setText(item.querySelector('.t-chg'), changeText, `t-chg ${signClass(change)}`);
+    }
+  }
+}
+
+// --- operator controls -----------------------------------------------------
+
+// Nothing is visible until somebody moves the mouse, so the projector shows a
+// clean board; the controls fade back out on their own.
+let hideControls;
+function revealControls() {
+  $('controls').dataset.show = 'true';
+  clearTimeout(hideControls);
+  hideControls = setTimeout(() => { $('controls').dataset.show = 'false'; }, 2500);
+}
+
+document.addEventListener('mousemove', revealControls);
+
+$('btn-mode').addEventListener('click', () => setMode(mode === 'price' ? 'percent' : 'price'));
+
+$('btn-full').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'f' || event.key === 'F') $('btn-full').click();
+  if (event.key === 'p' || event.key === 'P') setMode(mode === 'price' ? 'percent' : 'price');
+});
+
+// --- go --------------------------------------------------------------------
 
 setMode(mode);
-onState(render);
+onState((s) => {
+  if (!s.clock) return;
+  renderHead(s);
+  renderChart(s);
+  renderQuotes(s);
+  renderTape(s);
+});
+window.addEventListener('resize', () => chart.setScale(chartScale()));
 connect();
