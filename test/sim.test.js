@@ -154,12 +154,45 @@ test('a pump campaign is spread across its minutes and then expires', () => {
   b.price = 1000;
   b.anchor = 1000;
   const start = b.price;
-  sim.pump(s, b.id, -20, 40, false);
-  sim.step(s);
-  assert.ok(b.price < start && b.price > start * 0.9, 'only part of the move has landed');
-  for (let i = 0; i < 39; i++) sim.step(s);
+  const minutes = 40;
+  sim.pump(s, b.id, -20, minutes, false);
+  for (let i = 0; i < minutes / 2; i++) sim.step(s);
+  // The campaign wobbles (deliberately), so any single early tick can swing
+  // either direction — but by the midpoint it has moved and isn't done yet.
+  assert.notEqual(b.price, start, 'has moved partway through the campaign');
+  assert.ok(b.pump, 'campaign still running at the midpoint');
+  for (let i = 0; i < minutes / 2; i++) sim.step(s);
   assert.equal(b.pump, null, 'campaign expires');
-  assert.ok(Math.abs(b.price - start * 0.8) < 2, 'full -20% delivered');
+  assert.equal(b.price, start * 0.8, 'lands exactly on the promised -20%, not just close to it');
+});
+
+// A campaign is a promise: push it up X% over Y minutes and it WILL be up
+// X% when Y minutes are up, no matter what the market throws at it along the
+// way — heavy volatility, strong gravity pulling the other way, all of it.
+// The path in between is free to wander (and is deliberately wobblier than
+// normal), but the destination is not negotiable.
+test('a pump campaign lands exactly on target despite strong gravity and noise fighting it', () => {
+  const s = freshState();
+  const b = s.businesses[0];
+  b.truePrice = 500;
+  b.price = 500;
+  b.anchor = 500; // permanent:false below, so gravity actively opposes the push
+  b.volatility = 0.02;
+  b.meanReversion = 0.08;
+  const start = b.truePrice;
+  const target = start * 1.05;
+  const minutes = 15;
+  sim.pump(s, b.id, 5, minutes, false);
+  // A perfectly noise-free bridge would follow this exact geometric path.
+  const straightLine = (i) => start * Math.exp((Math.log(target / start) * i) / minutes);
+  let maxDeviation = 0;
+  for (let i = 1; i <= minutes; i++) {
+    sim.step(s);
+    maxDeviation = Math.max(maxDeviation, Math.abs(b.truePrice - straightLine(i)));
+  }
+  assert.equal(b.truePrice, target, 'landed exactly on the +5% target');
+  assert.equal(b.pump, null, 'campaign expires on schedule');
+  assert.ok(maxDeviation > 2, 'wobbled noticeably off the straight-line path along the way');
 });
 
 test('gravity pulls a pumped price back when the pump is not permanent', () => {

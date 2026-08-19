@@ -161,7 +161,7 @@ export function makeBusiness(input, slot) {
     dayHigh: price,
     dayLow: price,
     history: [price],
-    pump: null, // { perMinute, remaining, totalMinutes, percent }
+    pump: null, // { target, remaining, totalMinutes, percent }
   };
 }
 
@@ -261,22 +261,44 @@ export function netWorth(state) {
 
 // --- the tick --------------------------------------------------------------
 
+// A campaign wobbles harder than ordinary day-to-day noise — even a sleepy
+// listing should visibly swing while it's being pushed — but still always
+// lands exactly on target.
+const PUMP_WOBBLE_MULT = 1.8;
+const PUMP_WOBBLE_FLOOR = 0.004;
+
 function advancePrices(state, exchangeOpen) {
   for (const b of state.businesses) {
     // The private book is never listed, so it keeps moving after the bell.
     if (exchangeOpen || b.market === 'private') {
-      const pull = b.meanReversion * Math.log(b.anchor / b.truePrice);
-      let r = b.drift + pull + gauss() * b.volatility;
-
       if (b.pump && b.pump.remaining > 0) {
-        r += b.pump.perMinute;
+        const remaining = b.pump.remaining;
+        if (remaining === 1) {
+          // Land exactly on target — no rate-based approximation, so
+          // accumulated float/rounding drift from earlier ticks can't leave
+          // it short.
+          b.truePrice = clamp(b.pump.target, MIN_PRICE, MAX_PRICE);
+        } else {
+          // The rate needed to reach the target is recalculated fresh every
+          // tick from wherever the price actually is, so the wobble below
+          // (or ordinary gravity, if this business still has some) can shove
+          // it around along the way without ever stopping it from arriving
+          // on schedule.
+          const needed = Math.log(b.pump.target / b.truePrice) / remaining;
+          const wobble = Math.max(b.volatility, PUMP_WOBBLE_FLOOR) * PUMP_WOBBLE_MULT;
+          const r = needed + gauss() * wobble;
+          b.truePrice = round2(clamp(b.truePrice * Math.exp(r), MIN_PRICE, MAX_PRICE));
+        }
         b.pump.remaining -= 1;
         if (b.pump.remaining <= 0) b.pump = null;
+      } else {
+        const pull = b.meanReversion * Math.log(b.anchor / b.truePrice);
+        const r = b.drift + pull + gauss() * b.volatility;
+        b.truePrice = round2(clamp(b.truePrice * Math.exp(r), MIN_PRICE, MAX_PRICE));
       }
 
       // The walk runs on the continuous truePrice so sub-euro drift keeps
       // accumulating; only the rounded price is ever shown or dealt.
-      b.truePrice = round2(clamp(b.truePrice * Math.exp(r), MIN_PRICE, MAX_PRICE));
       b.price = roundPrice(b.truePrice);
       b.dayHigh = Math.max(b.dayHigh, b.price);
       b.dayLow = Math.min(b.dayLow, b.price);
@@ -392,8 +414,11 @@ export function pump(state, id, percent, minutes, permanent = true) {
     b.dayLow = Math.min(b.dayLow, b.price);
     b.pump = null;
   } else {
+    // A campaign targets an exact price, not a fixed per-minute rate — see
+    // advancePrices, which recomputes the rate needed every tick so the move
+    // always lands on target regardless of the noise along the way.
     b.pump = {
-      perMinute: Math.log(factor) / mins,
+      target: clamp(round2(b.truePrice * factor), MIN_PRICE, MAX_PRICE),
       remaining: mins,
       totalMinutes: mins,
       percent: pct,
