@@ -71,7 +71,7 @@ export function createChart(canvas, tooltipEl) {
 
   function fmt(v) {
     if (mode === 'percent') return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-    return v >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : v.toFixed(2);
+    return v >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : v.toFixed(0);
   }
 
   function plot() {

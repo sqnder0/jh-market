@@ -118,9 +118,9 @@ export async function api(path, body = {}) {
 
 // --- formatting ------------------------------------------------------------
 
-// The in-game currency is muntjes, so amounts are bare numbers and the
-// surrounding label says what they are.
-export const money = (n, digits = 2) =>
+// The in-game currency is muntjes and briefjes — €1 coins and up — so
+// amounts are always whole numbers; the dealer has nothing to give in cents.
+export const money = (n, digits = 0) =>
   (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,

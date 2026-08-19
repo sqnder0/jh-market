@@ -73,20 +73,6 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .readouts {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      width: min(860px, 100%);
-    }
-
-    .panel { width: min(860px, 100%); text-align: left; }
-    .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .preset-row button[aria-pressed='true'] { background: var(--accent); border-color: transparent; color: #fff; }
   </style>
 </head>
 <body>
@@ -132,64 +118,6 @@
       </div>
       <div class="hour-ticks" id="hour-ticks"></div>
     </div>
-
-    <div class="readouts">
-      <div class="stat">
-        <div class="label">Verstreken</div>
-        <div class="value num" id="r-elapsed">–</div>
-        <div class="sub" id="r-elapsed-sub">–</div>
-      </div>
-      <div class="stat">
-        <div class="label">Tot einde dag</div>
-        <div class="value num" id="r-close">–</div>
-        <div class="sub">echte tijd</div>
-      </div>
-      <div class="stat">
-        <div class="label">Eén speluur</div>
-        <div class="value num" id="r-hour">–</div>
-        <div class="sub">echte minuten</div>
-      </div>
-      <div class="stat">
-        <div class="label">Hele dag</div>
-        <div class="value num" id="r-daylen">–</div>
-        <div class="sub" id="r-daylen-sub">echte tijd</div>
-      </div>
-    </div>
-
-    <section class="card panel">
-      <div class="card-head">
-        <h2>Snelheid</h2>
-        <div class="btn-row">
-          <button id="btn-toggle" class="primary">Pauze</button>
-          <button id="btn-skip" class="ghost">Meteen naar de volgende dag</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Hoeveel echte minuten duurt één speluur?</label>
-        <div class="preset-row" id="preset">
-          <button data-min="0.25" class="sm">15 sec</button>
-          <button data-min="1" class="sm">1 min</button>
-          <button data-min="2" class="sm">2 min</button>
-          <button data-min="3" class="sm">3 min</button>
-          <button data-min="5" class="sm">5 min</button>
-          <button data-min="10" class="sm">10 min</button>
-        </div>
-      </div>
-
-      <div class="field-row">
-        <div class="field">
-          <label for="hourlen">Zelf instellen — echte minuten per speluur</label>
-          <input type="number" id="hourlen" min="0.05" max="120" step="0.25" />
-        </div>
-        <div class="field">
-          <label for="jump">Klok verzetten naar</label>
-          <input type="text" id="jump" placeholder="15:00" />
-        </div>
-        <button id="btn-apply" class="primary">Toepassen</button>
-      </div>
-      <p class="muted" id="plan-hint" style="margin: 10px 0 0; font-size: 12px;">–</p>
-    </section>
   </main>
 
   <script type="module" src="/js/clock.js"></script>

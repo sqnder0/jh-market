@@ -42,16 +42,16 @@ function renderQuotes(s) {
     (node, c, b) => {
       setText(c.sym, b.symbol);
       setText(c.name, b.name);
-      setText(c.price, b.price.toFixed(2));
+      setText(c.price, b.price.toFixed(0));
       const change = b.price - b.dayOpen;
       setText(
         c.delta,
-        `${arrow(change)} ${Math.abs(change).toFixed(2)}  ${b.dayOpen ? pct((change / b.dayOpen) * 100) : ''}`,
+        `${arrow(change)} ${Math.abs(change).toFixed(0)}  ${b.dayOpen ? pct((change / b.dayOpen) * 100) : ''}`,
         `delta ${signClass(change)}`,
       );
-      setText(c.open, b.dayOpen.toFixed(2));
-      setText(c.low, b.dayLow.toFixed(2));
-      setText(c.high, b.dayHigh.toFixed(2));
+      setText(c.open, b.dayOpen.toFixed(0));
+      setText(c.low, b.dayLow.toFixed(0));
+      setText(c.high, b.dayHigh.toFixed(0));
       const qty = b.position?.qty || 0;
       c.held.hidden = qty === 0;
       if (qty) setText(c.held, `${qty} in bezit · gemiddeld gekocht aan ${money(b.position.avgCost)}`);
@@ -73,7 +73,7 @@ function renderPublic(s) {
       c.swatch.style.background = b.color;
       setText(c.sym, b.symbol);
       setText(c.name, ` ${b.name}`);
-      setText(c.price, b.price.toFixed(2));
+      setText(c.price, b.price.toFixed(0));
       const change = b.price - b.dayOpen;
       setText(c.chg, b.dayOpen ? pct((change / b.dayOpen) * 100) : '–', `num ${signClass(change)}`);
     });

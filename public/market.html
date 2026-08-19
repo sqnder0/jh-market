@@ -15,7 +15,7 @@
     .board {
       height: 100vh;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 0.9vh;
       padding: 1.1vh 1.1vw;
     }
@@ -274,6 +274,10 @@
       </div>
     </header>
 
+    <div class="tape" id="tape">
+      <div class="tape-track" id="tape-track"></div>
+    </div>
+
     <main class="board-main">
       <section class="board-panel">
         <div class="panel-title">
@@ -297,10 +301,6 @@
         <div class="empty-board" id="quotes-empty" hidden>Nog geen bedrijven op de beurs.</div>
       </section>
     </main>
-
-    <footer class="tape" id="tape">
-      <div class="tape-track" id="tape-track"></div>
-    </footer>
   </div>
 
   <div class="board-controls" id="controls" data-show="false">

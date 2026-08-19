@@ -117,12 +117,12 @@ function renderQuotes(s) {
       c.bar.style.background = b.color;
       setText(c.sym, b.symbol);
       setText(c.co, b.name);
-      setText(c.px, b.price.toFixed(2));
+      setText(c.px, b.price.toFixed(0));
 
       const change = b.price - b.dayOpen;
       setText(
         c.chg,
-        `${arrow(change)} ${Math.abs(change).toFixed(2)}  ${b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : ''}`,
+        `${arrow(change)} ${Math.abs(change).toFixed(0)}  ${b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : ''}`,
         `chg ${signClass(change)}`,
       );
 
@@ -182,7 +182,7 @@ function renderTape(s) {
     const change = b.price - b.dayOpen;
     const changeText = `${arrow(change)} ${b.dayOpen ? pct((change / b.dayOpen) * 100, 1) : '–'}`;
     for (const item of track.querySelectorAll(`[data-key="${b.id}"]`)) {
-      setText(item.querySelector('.t-px'), b.price.toFixed(2));
+      setText(item.querySelector('.t-px'), b.price.toFixed(0));
       setText(item.querySelector('.t-chg'), changeText, `t-chg ${signClass(change)}`);
     }
   }

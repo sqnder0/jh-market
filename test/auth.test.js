@@ -62,8 +62,8 @@ async function login() {
   return setCookie.split(';')[0];
 }
 
-test('the board and the login page are open to anyone', async () => {
-  for (const page of ['/market', '/login']) {
+test('the board, the clock and the login page are open to anyone', async () => {
+  for (const page of ['/market', '/clock', '/login']) {
     assert.equal((await get(page)).status, 200, `${page} is public`);
   }
   assert.equal((await get('/api/health')).status, 200, 'health probes need no session');
@@ -71,7 +71,7 @@ test('the board and the login page are open to anyone', async () => {
 });
 
 test('every other page redirects to the login screen', async () => {
-  for (const page of ['/', '/clock', '/desk', '/private', '/admin']) {
+  for (const page of ['/', '/desk', '/private', '/admin']) {
     const res = await get(page);
     assert.equal(res.status, 302, `${page} is gated`);
     assert.equal(res.headers.get('location'), `/login?next=${encodeURIComponent(page)}`);

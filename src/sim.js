@@ -31,7 +31,7 @@ export const SERIES_COLORS = [
   '#e66767', // red
 ];
 
-const MIN_PRICE = 0.01;
+const MIN_PRICE = 1;
 const MAX_PRICE = 1_000_000;
 
 // --- helpers ---------------------------------------------------------------
@@ -58,6 +58,9 @@ function gauss() {
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const round2 = (n) => Math.round(n * 100) / 100;
+// Business prices are rounded to whole euros: the dealer only has €1 muntjes
+// and briefjes, so nothing on the board can cost cents.
+const roundPrice = (n) => Math.round(n);
 
 function num(value, fallback, lo, hi) {
   const n = typeof value === 'number' ? value : Number.parseFloat(value);
@@ -133,7 +136,7 @@ function seedBusinesses() {
 }
 
 export function makeBusiness(input, slot) {
-  const price = num(input.price, 100, MIN_PRICE, MAX_PRICE);
+  const price = roundPrice(num(input.price, 100, MIN_PRICE, MAX_PRICE));
   return {
     id: randomUUID().slice(0, 8),
     name: String(input.name || 'Unnamed Co.').slice(0, 48),
@@ -149,7 +152,7 @@ export function makeBusiness(input, slot) {
     prevClose: price,
     dayHigh: price,
     dayLow: price,
-    history: [round2(price)],
+    history: [price],
     pump: null, // { perMinute, remaining, totalMinutes, percent }
   };
 }
@@ -210,9 +213,9 @@ export function normalizeState(raw) {
 export function alignHistories(state) {
   const want = state.clock.minuteOfDay + 1;
   for (const b of state.businesses) {
-    if (!Array.isArray(b.history) || b.history.length === 0) b.history = [round2(b.price)];
+    if (!Array.isArray(b.history) || b.history.length === 0) b.history = [b.price];
     while (b.history.length > want) b.history.pop();
-    while (b.history.length < want) b.history.push(round2(b.price));
+    while (b.history.length < want) b.history.push(b.price);
   }
   if (!Array.isArray(state.portfolio.equityHistory)) state.portfolio.equityHistory = [];
   const eq = state.portfolio.equityHistory;
@@ -256,7 +259,7 @@ function advancePrices(state, exchangeOpen) {
         if (b.pump.remaining <= 0) b.pump = null;
       }
 
-      b.price = round2(clamp(b.price * Math.exp(r), MIN_PRICE, MAX_PRICE));
+      b.price = roundPrice(clamp(b.price * Math.exp(r), MIN_PRICE, MAX_PRICE));
       b.dayHigh = Math.max(b.dayHigh, b.price);
       b.dayLow = Math.min(b.dayLow, b.price);
     }
@@ -314,8 +317,8 @@ export function updateBusiness(state, id, patch) {
   if (patch.meanReversion !== undefined) b.meanReversion = num(patch.meanReversion, b.meanReversion, 0, 0.2);
   if (patch.anchor !== undefined) b.anchor = num(patch.anchor, b.anchor, MIN_PRICE, MAX_PRICE);
   if (patch.price !== undefined) {
-    b.price = num(patch.price, b.price, MIN_PRICE, MAX_PRICE);
-    b.history[b.history.length - 1] = round2(b.price);
+    b.price = roundPrice(num(patch.price, b.price, MIN_PRICE, MAX_PRICE));
+    b.history[b.history.length - 1] = b.price;
     b.dayHigh = Math.max(b.dayHigh, b.price);
     b.dayLow = Math.min(b.dayLow, b.price);
   }
@@ -363,7 +366,7 @@ export function pump(state, id, percent, minutes, permanent = true) {
   if (permanent) b.anchor = clamp(b.anchor * factor, MIN_PRICE, MAX_PRICE);
 
   if (mins <= 0) {
-    b.price = clamp(round2(b.price * factor), MIN_PRICE, MAX_PRICE);
+    b.price = clamp(roundPrice(b.price * factor), MIN_PRICE, MAX_PRICE);
     b.history[b.history.length - 1] = b.price;
     b.dayHigh = Math.max(b.dayHigh, b.price);
     b.dayLow = Math.min(b.dayLow, b.price);
@@ -397,7 +400,9 @@ export function trade(state, id, side, qtyInput) {
 
   const p = state.portfolio;
   const price = b.price;
-  const fee = (state.settings.feePct / 100) * qty * price;
+  // The dealer only has whole-euro coins and notes, so the fee (if any) has to
+  // round to a whole euro too — nothing in the till can be fractional.
+  const fee = Math.round((state.settings.feePct / 100) * qty * price);
 
   if (side === 'buy') {
     const cost = qty * price + fee;
@@ -436,7 +441,7 @@ export function trade(state, id, side, qtyInput) {
 }
 
 export function resetPortfolio(state, cash) {
-  const start = num(cash, state.portfolio.startingCash, 0, 1e12);
+  const start = roundPrice(num(cash, state.portfolio.startingCash, 0, 1e12));
   state.portfolio.startingCash = start;
   state.portfolio.cash = start;
   state.portfolio.realized = 0;

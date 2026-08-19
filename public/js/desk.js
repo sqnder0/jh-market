@@ -67,11 +67,11 @@ function renderPrices(s) {
       setText(c.tag, b.market === 'private' ? 'privé' : 'beurs');
       const change = b.price - b.dayOpen;
       const cls = signClass(change);
-      setText(c.price, b.price.toFixed(2));
-      setText(c.chg, `${arrow(change)} ${Math.abs(change).toFixed(2)}`, `num ${cls}`);
+      setText(c.price, b.price.toFixed(0));
+      setText(c.chg, `${arrow(change)} ${Math.abs(change).toFixed(0)}`, `num ${cls}`);
       setText(c.chgPct, b.dayOpen ? pct((change / b.dayOpen) * 100) : '–', `num ${cls}`);
-      setText(c.low, b.dayLow.toFixed(2));
-      setText(c.high, b.dayHigh.toFixed(2));
+      setText(c.low, b.dayLow.toFixed(0));
+      setText(c.high, b.dayHigh.toFixed(0));
       setText(c.pos, b.position ? String(b.position.qty) : '–');
     });
 }
@@ -81,7 +81,7 @@ function renderBook(s) {
   const totalPL = p.equity - p.startingCash;
 
   setText($('s-equity'), money(p.equity), `value num ${signClass(totalPL)}`);
-  setText($('s-equity-sub'), `${pct(p.totalPct)} tegenover ${money(p.startingCash, 0)} start`, `sub ${signClass(totalPL)}`);
+  setText($('s-equity-sub'), `${pct(p.totalPct)} tegenover ${money(p.startingCash)} start`, `sub ${signClass(totalPL)}`);
   setText($('s-cash'), money(p.cash));
   setText($('s-invested'), money(p.invested));
   setText($('s-invested-sub'), `${p.positions.length} positie${p.positions.length === 1 ? '' : 's'}`);
@@ -109,8 +109,8 @@ function renderBook(s) {
       c.swatch.style.background = pos.color;
       setText(c.sym, pos.symbol);
       setText(c.qty, String(pos.qty));
-      setText(c.avg, pos.avgCost.toFixed(2));
-      setText(c.last, pos.price.toFixed(2));
+      setText(c.avg, pos.avgCost.toFixed(0));
+      setText(c.last, pos.price.toFixed(0));
       setText(c.pl, `${money(pos.unrealized)} (${pct(pos.unrealizedPct, 1)})`, `num ${signClass(pos.unrealized)}`);
     });
 
@@ -130,7 +130,7 @@ function renderBook(s) {
           text: `${label[t.side] || t.side} ${t.symbol}`,
         })]),
         el('td', { class: 'num', text: String(t.qty) }),
-        el('td', { class: 'num', text: t.price.toFixed(2) }),
+        el('td', { class: 'num', text: t.price.toFixed(0) }),
       ]));
     }
   }

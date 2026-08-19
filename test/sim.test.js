@@ -114,12 +114,17 @@ test('the seed market has a public board and a private book', () => {
   assert.ok(publics.some((b) => /casino/i.test(b.name)), 'the casino is publicly traded');
 });
 
+// Prices round to whole euros for the dealer, so these pump tests use a
+// higher-priced business — otherwise a small percentage move can round away
+// to nothing and mask the mechanism being tested.
 test('an instant pump lands immediately and moves fair value', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.price = 1000;
+  b.anchor = 1000;
   const start = b.price;
   sim.pump(s, b.id, 10, 0, true);
-  assert.ok(Math.abs(b.price - start * 1.1) < 0.02, 'price jumped 10%');
+  assert.ok(Math.abs(b.price - start * 1.1) < 1, 'price jumped 10%');
   assert.ok(Math.abs(b.anchor - start * 1.1) < 0.02, 'fair value followed');
   assert.equal(b.history.at(-1), b.price, 'the jump is reflected in the last chart point');
 });
@@ -127,18 +132,22 @@ test('an instant pump lands immediately and moves fair value', () => {
 test('a pump campaign is spread across its minutes and then expires', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.price = 1000;
+  b.anchor = 1000;
   const start = b.price;
   sim.pump(s, b.id, -20, 40, false);
   sim.step(s);
   assert.ok(b.price < start && b.price > start * 0.9, 'only part of the move has landed');
   for (let i = 0; i < 39; i++) sim.step(s);
   assert.equal(b.pump, null, 'campaign expires');
-  assert.ok(Math.abs(b.price - start * 0.8) < 0.05, 'full -20% delivered');
+  assert.ok(Math.abs(b.price - start * 0.8) < 2, 'full -20% delivered');
 });
 
 test('gravity pulls a pumped price back when the pump is not permanent', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.price = 1000;
+  b.anchor = 1000;
   const start = b.price;
   b.meanReversion = 0.05;
   sim.pump(s, b.id, 25, 0, false);

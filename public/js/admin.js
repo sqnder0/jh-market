@@ -13,8 +13,27 @@ const speedFromHourMinutes = (minutes) => 1 / minutes;
 
 // --- clock ------------------------------------------------------------------
 
-$('btn-toggle').addEventListener('click', () => api('/api/clock', { running: !store.clock.running }));
+$('btn-play').addEventListener('click', () => api('/api/clock', { running: true }));
+$('btn-pause').addEventListener('click', () => api('/api/clock', { running: false }));
+$('btn-stop').addEventListener('click', () =>
+  api('/api/clock', { running: false, minuteOfDay: 0 }).then(() => toast('Klok teruggezet naar het begin van de dag', 'success')));
 $('btn-skip').addEventListener('click', () => api('/api/clock/skip-day').then(() => toast('Nieuwe speldag', 'success')));
+
+$('btn-reset').addEventListener('click', (event) => {
+  const btn = event.currentTarget;
+  if (btn.dataset.armed !== 'true') {
+    btn.dataset.armed = 'true';
+    btn.textContent = 'Zeker weten? Klik nog eens';
+    setTimeout(() => {
+      btn.dataset.armed = 'false';
+      btn.textContent = '↺ Spel herstarten';
+    }, 4000);
+    return;
+  }
+  btn.dataset.armed = 'false';
+  btn.textContent = '↺ Spel herstarten';
+  api('/api/market/reset').then(() => toast('Spel herstart', 'success'));
+});
 
 $('preset').addEventListener('click', (event) => {
   const btn = event.target.closest('button');
@@ -83,22 +102,6 @@ $('enforce').addEventListener('change', (event) => {
   api('/api/settings', { enforceExchangeHours: event.target.checked });
 });
 
-$('btn-reset-market').addEventListener('click', (event) => {
-  const btn = event.currentTarget;
-  if (btn.dataset.armed !== 'true') {
-    btn.dataset.armed = 'true';
-    btn.textContent = 'Klik nog eens om alles te wissen';
-    setTimeout(() => {
-      btn.dataset.armed = 'false';
-      btn.textContent = 'Hele markt terug naar de standaard';
-    }, 4000);
-    return;
-  }
-  btn.dataset.armed = 'false';
-  btn.textContent = 'Hele markt terug naar de standaard';
-  api('/api/market/reset').then(() => toast('Markt gereset', 'success'));
-});
-
 // --- add business -----------------------------------------------------------
 
 $('btn-add').addEventListener('click', async () => {
@@ -146,8 +149,8 @@ function buildCard(b, palette) {
     el('option', { value: 'private', text: 'Privé (zakenman)' }),
   ]);
   refs.inMarket.value = b.market;
-  refs.inPrice = el('input', { type: 'number', step: '0.01', min: '0.01', placeholder: 'leeg = ongewijzigd' });
-  refs.inAnchor = el('input', { type: 'number', step: '0.01', min: '0.01', value: b.anchor.toFixed(2) });
+  refs.inPrice = el('input', { type: 'number', step: '1', min: '1', placeholder: 'leeg = ongewijzigd' });
+  refs.inAnchor = el('input', { type: 'number', step: '1', min: '1', value: b.anchor.toFixed(0) });
 
   refs.swatches = el('div', { class: 'swatches' }, palette.map((hex, i) => el('button', {
     type: 'button',
@@ -315,7 +318,8 @@ function renderBusinesses(s) {
 onState((s) => {
   const c = s.clock;
   setText($('clock-read'), `Dag ${c.day} · ${c.time}`);
-  setText($('btn-toggle'), c.running ? 'Pauze' : 'Verder');
+  $('btn-play').disabled = c.running;
+  $('btn-pause').disabled = !c.running;
   setText($('speed-hint'),
     `Eén speluur duurt ${durationText(c.realSecondsPerGameHour)} · een hele speldag ${durationText(c.realSecondsPerDay)}` +
     ` · beurs ${c.sessions.exchangeOpen ? 'open' : 'dicht'}, casino ${c.sessions.casinoOpen ? 'open' : 'dicht'}`);

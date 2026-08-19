@@ -33,8 +33,9 @@ const AUTH_COOKIE = 'jhm_auth';
 const AUTH_TOKEN = crypto.createHash('sha256').update(`jh-market::${AUTH_PASSWORD}`).digest('hex');
 const AUTH_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
-// The board is meant to hang on a wall with nobody logged in.
-const PUBLIC_PAGES = new Set(['/market', '/login']);
+// The board and the clock are meant to hang on a wall (or be checked from a
+// kid's phone) with nobody logged in.
+const PUBLIC_PAGES = new Set(['/market', '/clock', '/login']);
 const TICK_MS = 50; // real-time loop resolution
 const BROADCAST_MS = 100; // how often pages are pushed an update
 const MAX_STEPS_PER_LOOP = 400; // guard against runaway catch-up after a stall
