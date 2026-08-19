@@ -131,6 +131,20 @@ test('the seed market has a public board and a private book', () => {
   assert.ok(publics.some((b) => /casino/i.test(b.name)), 'the casino is publicly traded');
 });
 
+// Regression: whole-euro rounding means a cheap listing needs proportionally
+// more volatility than an expensive one to visibly move at the same pace —
+// a flat percentage looks calm on a high price and frozen on a low one. This
+// checks every seed business clears a minimum "euros of wobble per minute",
+// not just a minimum percentage, so nobody re-tunes one in isolation and
+// quietly freezes it again.
+test('every seed listing has enough absolute volatility to visibly move', () => {
+  const s = sim.createState();
+  for (const b of s.businesses) {
+    assert.ok(b.price * b.volatility > 0.25,
+      `${b.symbol}: price(${b.price}) * volatility(${b.volatility}) is too small to move on a whole-euro board`);
+  }
+});
+
 // Prices round to whole euros for the dealer, so these pump tests use a
 // higher-priced business — otherwise a small percentage move can round away
 // to nothing and mask the mechanism being tested.

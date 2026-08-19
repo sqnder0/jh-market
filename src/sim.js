@@ -122,15 +122,19 @@ function seedBusinesses() {
   const seeds = [
     // Publicly traded — these are what the kids see on the board. Prices are
     // kept in muntjes, so a handful of coins buys a real number of shares.
-    { name: 'Casino Fortuna', symbol: 'CAS', market: 'public', price: 24, volatility: 0.004, drift: 0.0001, meanReversion: 0.0006 },
-    { name: 'Boomhut Bouwers', symbol: 'BHB', market: 'public', price: 12, volatility: 0.0025, drift: 0.00008, meanReversion: 0.0009 },
-    { name: 'Guru Global', symbol: 'GUR', market: 'public', price: 7, volatility: 0.009, drift: -0.0004, meanReversion: 0.0004 },
-    { name: 'Muntjesbank', symbol: 'MNT', market: 'public', price: 18, volatility: 0.0015, drift: 0.00003, meanReversion: 0.0016 },
-    { name: 'Sikje Cosmetics', symbol: 'SIK', market: 'public', price: 5.5, volatility: 0.005, drift: 0.00012, meanReversion: 0.0008 },
+    // Volatility is set roughly proportional to 1/price (not a flat percent)
+    // so every listing crosses a whole-euro boundary at about the same pace —
+    // otherwise a cheap, "calm" stock like MNT could sit at the same rounded
+    // price for most of the day just because its euro-sized moves are small.
+    { name: 'Casino Fortuna', symbol: 'CAS', market: 'public', price: 24, volatility: 0.012, drift: 0.0001, meanReversion: 0.0006 },
+    { name: 'Boomhut Bouwers', symbol: 'BHB', market: 'public', price: 12, volatility: 0.024, drift: 0.00008, meanReversion: 0.0009 },
+    { name: 'Guru Global', symbol: 'GUR', market: 'public', price: 7, volatility: 0.04, drift: -0.0004, meanReversion: 0.0004 },
+    { name: 'Muntjesbank', symbol: 'MNT', market: 'public', price: 18, volatility: 0.016, drift: 0.00003, meanReversion: 0.0016 },
+    { name: 'Sikje Cosmetics', symbol: 'SIK', market: 'public', price: 5.5, volatility: 0.048, drift: 0.00012, meanReversion: 0.0008 },
     // The businessman's private book — no chart, higher return, read out by hand.
-    { name: 'Villa Vastgoed', symbol: 'VIL', market: 'private', price: 45, volatility: 0.003, drift: 0.0006, meanReversion: 0.0003 },
-    { name: 'Zwarte Kat Import', symbol: 'ZKI', market: 'private', price: 30, volatility: 0.006, drift: 0.0008, meanReversion: 0.0002 },
-    { name: 'Gouden Handdruk NV', symbol: 'GHN', market: 'private', price: 60, volatility: 0.0035, drift: 0.0005, meanReversion: 0.0004 },
+    { name: 'Villa Vastgoed', symbol: 'VIL', market: 'private', price: 45, volatility: 0.0065, drift: 0.0006, meanReversion: 0.0003 },
+    { name: 'Zwarte Kat Import', symbol: 'ZKI', market: 'private', price: 30, volatility: 0.0095, drift: 0.0008, meanReversion: 0.0002 },
+    { name: 'Gouden Handdruk NV', symbol: 'GHN', market: 'private', price: 60, volatility: 0.005, drift: 0.0005, meanReversion: 0.0004 },
   ];
   return seeds.map((s, i) => makeBusiness(s, i));
 }
