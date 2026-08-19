@@ -136,15 +136,23 @@ function seedBusinesses() {
 }
 
 export function makeBusiness(input, slot) {
-  const price = roundPrice(num(input.price, 100, MIN_PRICE, MAX_PRICE));
+  // `truePrice` is the continuous value the random walk actually runs on;
+  // `price` is truePrice rounded to a whole euro — the only number the board,
+  // the dealer and the kids ever see or trade at. Running the walk itself on
+  // whole euros kills it stone dead for anything with modest volatility: a
+  // typical tick moves the price by well under €0.50, which rounds straight
+  // back to the same integer forever, so the price never budges.
+  const truePrice = num(input.truePrice ?? input.price, 100, MIN_PRICE, MAX_PRICE);
+  const price = roundPrice(truePrice);
   return {
     id: randomUUID().slice(0, 8),
     name: String(input.name || 'Unnamed Co.').slice(0, 48),
     symbol: String(input.symbol || 'NEW').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'NEW',
     market: input.market === 'private' ? 'private' : 'public',
     colorIndex: Number.isInteger(slot) ? slot : 0,
+    truePrice,
     price,
-    anchor: price, // fair value the price is pulled toward
+    anchor: truePrice, // fair value the price is pulled toward
     volatility: num(input.volatility, 0.003, 0, 0.2), // per sim-minute sigma
     drift: num(input.drift, 0, -0.01, 0.01), // per sim-minute mu
     meanReversion: num(input.meanReversion, 0.0008, 0, 0.2),
@@ -200,7 +208,14 @@ export function normalizeState(raw) {
   s.portfolio.positions = raw.portfolio?.positions || {};
   s.portfolio.trades = raw.portfolio?.trades || [];
   s.businesses = Array.isArray(raw.businesses) && raw.businesses.length
-    ? raw.businesses.map((b, i) => ({ ...makeBusiness(b, i), ...b, id: b.id || randomUUID().slice(0, 8) }))
+    ? raw.businesses.map((b, i) => {
+      const merged = { ...makeBusiness(b, i), ...b, id: b.id || randomUUID().slice(0, 8) };
+      // A save from before truePrice existed carries only the old (possibly
+      // fractional, possibly already-rounded) price — resync the whole-euro
+      // display price to whatever truePrice makeBusiness derived it from.
+      merged.price = roundPrice(merged.truePrice);
+      return merged;
+    })
     : fresh.businesses;
   s.clock.minuteOfDay = clamp(Math.round(s.clock.minuteOfDay) || 0, 0, minutesPerDay(s));
   alignHistories(s);
@@ -250,7 +265,7 @@ function advancePrices(state, exchangeOpen) {
   for (const b of state.businesses) {
     // The private book is never listed, so it keeps moving after the bell.
     if (exchangeOpen || b.market === 'private') {
-      const pull = b.meanReversion * Math.log(b.anchor / b.price);
+      const pull = b.meanReversion * Math.log(b.anchor / b.truePrice);
       let r = b.drift + pull + gauss() * b.volatility;
 
       if (b.pump && b.pump.remaining > 0) {
@@ -259,7 +274,10 @@ function advancePrices(state, exchangeOpen) {
         if (b.pump.remaining <= 0) b.pump = null;
       }
 
-      b.price = roundPrice(clamp(b.price * Math.exp(r), MIN_PRICE, MAX_PRICE));
+      // The walk runs on the continuous truePrice so sub-euro drift keeps
+      // accumulating; only the rounded price is ever shown or dealt.
+      b.truePrice = round2(clamp(b.truePrice * Math.exp(r), MIN_PRICE, MAX_PRICE));
+      b.price = roundPrice(b.truePrice);
       b.dayHigh = Math.max(b.dayHigh, b.price);
       b.dayLow = Math.min(b.dayLow, b.price);
     }
@@ -317,7 +335,8 @@ export function updateBusiness(state, id, patch) {
   if (patch.meanReversion !== undefined) b.meanReversion = num(patch.meanReversion, b.meanReversion, 0, 0.2);
   if (patch.anchor !== undefined) b.anchor = num(patch.anchor, b.anchor, MIN_PRICE, MAX_PRICE);
   if (patch.price !== undefined) {
-    b.price = roundPrice(num(patch.price, b.price, MIN_PRICE, MAX_PRICE));
+    b.truePrice = num(patch.price, b.truePrice, MIN_PRICE, MAX_PRICE);
+    b.price = roundPrice(b.truePrice);
     b.history[b.history.length - 1] = b.price;
     b.dayHigh = Math.max(b.dayHigh, b.price);
     b.dayLow = Math.min(b.dayLow, b.price);
@@ -366,7 +385,8 @@ export function pump(state, id, percent, minutes, permanent = true) {
   if (permanent) b.anchor = clamp(b.anchor * factor, MIN_PRICE, MAX_PRICE);
 
   if (mins <= 0) {
-    b.price = clamp(roundPrice(b.price * factor), MIN_PRICE, MAX_PRICE);
+    b.truePrice = clamp(round2(b.truePrice * factor), MIN_PRICE, MAX_PRICE);
+    b.price = roundPrice(b.truePrice);
     b.history[b.history.length - 1] = b.price;
     b.dayHigh = Math.max(b.dayHigh, b.price);
     b.dayLow = Math.min(b.dayLow, b.price);

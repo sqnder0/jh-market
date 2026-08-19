@@ -105,6 +105,23 @@ test('prices move when volatility is on and stay put when it is off', () => {
   assert.ok(s.businesses.some((b, i) => b.price !== before[i]), 'volatility moves prices');
 });
 
+// Regression: prices are displayed and dealt in whole euros, but that
+// rounding must not happen to the walk itself. A tiny per-tick drift is
+// smaller than €0.50, so if the state were rounded to a whole euro every
+// tick (as it briefly was), it would round straight back to where it started
+// forever and the price could never move even with a steady, unmistakable
+// trend behind it.
+test('a small steady drift accumulates on the true price instead of being rounded away each tick', () => {
+  const s = freshState();
+  const b = s.businesses[0];
+  b.truePrice = 100;
+  b.price = 100;
+  b.anchor = 100;
+  b.drift = 0.0005; // ~€0.05/minute at this price — well under the €1 rounding grain
+  for (let i = 0; i < 300; i++) sim.step(s);
+  assert.ok(b.price > 100, 'the drift eventually crosses a whole-euro boundary');
+});
+
 test('the seed market has a public board and a private book', () => {
   const s = freshState();
   const publics = s.businesses.filter((b) => b.market === 'public');
@@ -120,6 +137,7 @@ test('the seed market has a public board and a private book', () => {
 test('an instant pump lands immediately and moves fair value', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.truePrice = 1000;
   b.price = 1000;
   b.anchor = 1000;
   const start = b.price;
@@ -132,6 +150,7 @@ test('an instant pump lands immediately and moves fair value', () => {
 test('a pump campaign is spread across its minutes and then expires', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.truePrice = 1000;
   b.price = 1000;
   b.anchor = 1000;
   const start = b.price;
@@ -146,6 +165,7 @@ test('a pump campaign is spread across its minutes and then expires', () => {
 test('gravity pulls a pumped price back when the pump is not permanent', () => {
   const s = freshState();
   const b = s.businesses[0];
+  b.truePrice = 1000;
   b.price = 1000;
   b.anchor = 1000;
   const start = b.price;
